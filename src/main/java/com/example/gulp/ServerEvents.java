@@ -3,6 +3,7 @@ package com.example.gulp;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.event.entity.living.LootingLevelEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.LogicalSide;
@@ -30,5 +31,14 @@ public final class ServerEvents {
     @SubscribeEvent
     public static void onDeath(LivingDeathEvent e) {
         if (e.getEntity() instanceof ServerPlayer p) StomachLogic.releaseAll(p);
+    }
+
+    // Rich Digestion perk: extra Looting levels, but only for mobs being digested right now.
+    @SubscribeEvent
+    public static void onLooting(LootingLevelEvent e) {
+        int bonus = StomachLogic.pendingLooting();
+        if (bonus > 0 && e.getDamageSource() != null && e.getDamageSource().getEntity() instanceof ServerPlayer) {
+            e.setLootingLevel(e.getLootingLevel() + bonus);
+        }
     }
 }

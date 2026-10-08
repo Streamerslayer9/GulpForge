@@ -10,7 +10,10 @@ import java.util.List;
 /** One player's stomach. Each entry in `contents` is an NBT compound:
  *  Entity (full saved mob), Size, MaxHealth, Digest, DigestTime, Name, Uid */
 public class Stomach {
-    public static final int MAX_LEVEL = 10;
+    public static final int MAX_LEVEL = 15;
+
+    /** Soft mode: XP per second for every 1.0 of mob volume you're holding. */
+    public static final float SOFT_XP_PER_VOLUME_SECOND = 0.5f;
 
     public boolean hard = false;
     public int level = 1;
@@ -20,7 +23,15 @@ public class Stomach {
     public final List<CompoundTag> contents = new ArrayList<>();
     public transient int cooldown = 0;
 
-    public static int xpForNext(int level) { return 100 * level; }
+    /** XP needed to go from `level` to the next. Grows faster than linear: 100, 280, 520, 800, 1120, 1470 ... */
+    public static int xpForNext(int level) {
+        return (int) (Math.round(100 * Math.pow(level, 1.5) / 10.0) * 10);
+    }
+
+    /** XP for digesting a mob. Tougher mobs are worth much more. */
+    public static int digestXp(float maxHealth) {
+        return 15 + (int) (3 * maxHealth);
+    }
 
     public int rank(Perk perk) { return ranks[perk.ordinal()]; }
 

@@ -24,7 +24,15 @@ import java.util.UUID;
 
 /** All the server-side stomach rules. */
 public final class StomachLogic {
-    private static final double REACH = 4.0;
+    /** Hard mode only: each swallowed mob has this chance every second to struggle and hurt you. */
+    private static final float STRUGGLE_CHANCE_PER_SECOND = 0.08f;
+    /** Damage of one struggle (1.0 = half a heart), before armor and Iron Stomach. */
+    private static final float STRUGGLE_DAMAGE = 1.0f;
+
+    /** Extra Looting levels applied to the mob being digested right now (see ServerEvents.onLooting). */
+    private static int pendingLooting = 0;
+
+    public static int pendingLooting() { return pendingLooting; }
 
     private StomachLogic() { }
 
@@ -35,7 +43,7 @@ public final class StomachLogic {
         StomachManager mgr = StomachManager.get(p.getServer());
         Stomach s = mgr.of(p.getUUID());
         switch (action) {
-            case 0 -> swallow(p, s);
+            case 0 -> swallow(p, s, arg);
             case 1 -> {
                 s.hard = !s.hard;
                 p.displayClientMessage(Component.literal(s.hard
@@ -87,11 +95,18 @@ public final class StomachLogic {
         return -1;
     }
 
-    private static void swallow(ServerPlayer p, Stomach s) {
+    private static void swallow(ServerPlayer p, Stomach s, int targetId) {
         if (s.cooldown > 0) return;
-        Entity target = findTarget(p);
-        if (!(target instanceof LivingEntity le) || target instanceof Player
-                || target instanceof EnderDragon || target instanceof WitherBoss) {
+        // Prefer what the player's client says they were looking at; fall back to our own forgiving search.
+        Entity target = null;
+        if (targetId >= 0) {
+            Entity candidate = p.serverLevel().getEntity(targetId);
+            if (candidate != null && TargetFinder.valid(candidate) && TargetFinder.withinReach(p, candidate, 2.0)) {
+                target = candidate;
+            }
+        }
+        if (target == null) target = TargetFinder.find(p, TargetFinder.REACH);
+        if (!(target instanceof LivingEntity le)) {
             p.displayClientMessage(Component.literal("Nothing swallowable in reach."), true);
             return;
         }
@@ -119,20 +134,10 @@ public final class StomachLogic {
 
         le.discard();
         s.contents.add(entry);
-        // Looking up makes swallowing faster.
-        s.cooldown = p.getXRot() < -30 ? 20 : 40;
+        // Quick Gulp perk: looking up makes swallowing faster.
+        s.cooldown = p.getXRot() < -30 ? Math.max(5, 40 - 10 * s.rank(Perk.QUICK)) : 40;
         playSfx(p, Gulp.SWALLOW.get(), SoundEvents.GENERIC_EAT);
         p.displayClientMessage(Component.literal("Gulp! Swallowed " + entry.getString("Name")), true);
-    }
-
-    private static Entity findTarget(ServerPlayer p) {
-        Vec3 start = p.getEyePosition();
-        Vec3 look = p.getViewVector(1.0f);
-        Vec3 end = start.add(look.scale(REACH));
-        AABB box = p.getBoundingBox().expandTowards(look.scale(REACH)).inflate(1.0);
-        EntityHitResult hit = ProjectileUtil.getEntityHitResult(p, start, end, box,
-                e -> !e.isSpectator() && e.isPickable() && e != p, REACH * REACH);
-        return hit == null ? null : hit.getEntity();
     }
 
     // ------------------------------------------------------------ per-tick
@@ -153,11 +158,23 @@ public final class StomachLogic {
                     it.remove();
                     digest(p, s, e);
                     changed = true;
+                } else if (p.tickCount % 20 == 0 && p.getHealth() > 4f
+                        && p.getRandom().nextFloat() < STRUGGLE_CHANCE_PER_SECOND) {
+                    // Hard mode only, and only now and then: the mob fights back.
+                    // Armor reduces it, Iron Stomach reduces it by 25% per rank, and it can't kill you.
+                    float damage = STRUGGLE_DAMAGE * Math.max(0f, 1f - 0.25f * s.rank(Perk.IRON));
+                    if (damage > 0f) {
+                        p.hurt(p.level().damageSources().generic(), damage);
+                        p.displayClientMessage(Component.literal(e.getString("Name") + " struggles inside you!"), true);
+                    }
                 }
             } else {
                 // Soft mode still earns XP (holding things is progress too).
                 if (p.tickCount % 20 == 0) {
-                    if (s.addXp(1) > 0) levelUp(p, s);
+                    float amount = e.getFloat("Size") * Stomach.SOFT_XP_PER_VOLUME_SECOND;
+                    int whole = (int) amount;
+                    if (p.getRandom().nextFloat() < amount - whole) whole++;
+                    if (whole > 0 && s.addXp(whole) > 0) levelUp(p, s);
                 }
                 // Healing Stomach perk
                 if (healAmount > 0 && p.tickCount % 100 == 0) {
@@ -167,32 +184,31 @@ public final class StomachLogic {
             }
         }
 
-        // Hard mode: things fight back. Armor reduces this. Never lethal on its own.
-        if (s.hard && !s.contents.isEmpty() && p.tickCount % 80 == 0 && p.getHealth() > 4f) {
-            p.hurt(p.level().damageSources().generic(), 0.5f * s.contents.size());
-        }
-
         if (p.tickCount % 20 == 0) mgr.setDirty();
         if (changed || p.tickCount % 10 == 0) sync(p, s);
     }
 
     private static void digest(ServerPlayer p, Stomach s, CompoundTag entry) {
         ServerLevel w = p.serverLevel();
-        // Rich Digestion perk
-        float bonusChance = 0.15f * s.rank(Perk.RICH);
-        int copies = 1 + (p.getRandom().nextFloat() < bonusChance ? 1 : 0);
-        for (int i = 0; i < copies; i++) {
-            EntityType.create(entry.getCompound("Entity"), w).ifPresent(e -> {
-                e.setUUID(UUID.randomUUID());
-                e.moveTo(p.getX(), p.getY(), p.getZ(), 0f, 0f);
-                w.addFreshEntity(e);
-                // Credit the kill to the player so loot tables (and Looting-style bonuses) apply.
-                if (e instanceof LivingEntity le) le.hurt(w.damageSources().playerAttack(p), 10000f);
-                else e.discard();
-            });
-        }
+        int looting = s.rank(Perk.RICH); // Rich Digestion perk = extra Looting levels
+        EntityType.create(entry.getCompound("Entity"), w).ifPresent(e -> {
+            e.setUUID(UUID.randomUUID());
+            e.moveTo(p.getX(), p.getY(), p.getZ(), 0f, 0f);
+            w.addFreshEntity(e);
+            // Credit the kill to the player so loot tables apply.
+            if (e instanceof LivingEntity le) {
+                pendingLooting = looting;
+                try {
+                    le.hurt(w.damageSources().playerAttack(p), 10000f);
+                } finally {
+                    pendingLooting = 0;
+                }
+            } else {
+                e.discard();
+            }
+        });
         playSfx(p, Gulp.DIGEST.get(), SoundEvents.PLAYER_BURP);
-        if (s.addXp(20 + (int) (entry.getFloat("Size") * 10)) > 0) levelUp(p, s);
+        if (s.addXp(Stomach.digestXp(entry.getFloat("MaxHealth"))) > 0) levelUp(p, s);
     }
 
     public static void release(ServerPlayer p, CompoundTag entry) {

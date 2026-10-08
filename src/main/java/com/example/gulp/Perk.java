@@ -1,10 +1,12 @@
 package com.example.gulp;
 
-/** The demo perks. Add a new one here, then give it an effect in Stomach/StomachLogic and an icon in PerksScreen. */
+/** The perks. Add a new one at the END of this list, give it an effect in StomachLogic and an icon in PerksScreen. */
 public enum Perk {
     ROOMY("Roomy Stomach", "+1 stomach capacity per rank.", 5),
-    HEALING("Healing Stomach", "Soft mode: held mobs heal 1 HP per rank every 5 seconds.", 3),
-    RICH("Rich Digestion", "+15% chance per rank of a bonus loot roll when you digest something.", 3);
+    HEALING("Healing Stomach", "Soft mode: held mobs heal 1 HP/rank every 5s.", 3),
+    RICH("Rich Digestion", "+1 Looting level per rank on digested mobs.", 3),
+    QUICK("Quick Gulp", "Looking up: swallow cooldown -0.5s per rank.", 3),
+    IRON("Iron Stomach", "Struggling mobs hurt 25% less per rank.", 3);
 
     public final String title;
     public final String description;

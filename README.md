@@ -20,9 +20,14 @@ Install Minecraft Forge for 1.20.1, then put gulp-0.1.0.jar in the mods folder. 
 ## Mechanics
 - Capacity is based on mob volume (width * width * height). Chicken ~0.1, villager ~0.7, cow ~1.1, horse ~3, iron golem ~5.
 - Soft mode: mobs are held safely, and you earn slow XP for holding them.
-- Hard mode: mobs digest over time and drop their normal loot; you earn more XP. They "struggle" and hurt you (armor helps).
-- Level ups raise capacity and give 1 perk point each. Perks: Roomy Stomach (+capacity), Healing Stomach
-  (soft mode heals held mobs), Rich Digestion (bonus loot chance). Add more in Perk.java.
+- Hard mode: mobs digest over time and drop their normal loot; you earn more XP. Now and then (about 8% per mob per second) a mob struggles and hurts you for half a heart. Hard mode only; armor and Iron Stomach reduce it, and it never kills you.
+- Levels go to 15. XP needed per level grows faster than linear (100, 280, 520, 800, 1120 ...).
+  Hard mode: digesting gives 15 + 3 x the mob's max health in XP. Soft mode: 0.5 XP per second per 1.0 of volume held.
+- Level ups raise capacity and give 1 perk point each. Perks (spend points with N > Perks):
+  Roomy Stomach (+capacity), Healing Stomach (soft mode heals held mobs), Rich Digestion (+1 Looting level per rank
+  on digested mobs), Quick Gulp (looking up: shorter swallow cooldown), Iron Stomach (less struggle damage).
+  Add more in Perk.java (append to the end).
+- Aiming: mobs have a slightly bigger hitbox for swallowing, and aiming near a mob (about 12 degrees) still counts.
 - Stomach contents are saved with the world. Dying releases everything.
 
 ## Visible belly

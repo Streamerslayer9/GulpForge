@@ -1,6 +1,7 @@
 package com.example.gulp;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.Entity;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -17,7 +18,11 @@ public final class ClientForgeEvents {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
-        while (ClientModEvents.SWALLOW_KEY.consumeClick()) Net.send(0);
+        while (ClientModEvents.SWALLOW_KEY.consumeClick()) {
+            // Use what the player actually sees on their screen, so wandering mobs and lag don't cause misses.
+            Entity target = TargetFinder.find(mc.player, TargetFinder.REACH);
+            Net.send(0, target == null ? -1 : target.getId());
+        }
         while (ClientModEvents.MODE_KEY.consumeClick()) Net.send(1);
         while (ClientModEvents.RELEASE_KEY.consumeClick()) Net.send(mc.player.isShiftKeyDown() ? 3 : 2);
         while (ClientModEvents.SCREEN_KEY.consumeClick()) {
