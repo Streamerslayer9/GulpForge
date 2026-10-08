@@ -1,0 +1,241 @@
+package com.example.gulp;
+
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
+import net.minecraft.world.entity.boss.wither.WitherBoss;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.ProjectileUtil;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.network.PacketDistributor;
+
+import java.util.Iterator;
+import java.util.UUID;
+
+/** All the server-side stomach rules. */
+public final class StomachLogic {
+    private static final double REACH = 4.0;
+
+    private StomachLogic() { }
+
+    // 0 swallow | 1 toggle mode | 2 release last | 3 release all
+    // 4 release entry (arg = uid) | 5 digest entry now (arg = uid) | 6 buy perk (arg = perk index)
+    public static void handleAction(ServerPlayer p, int action, int arg) {
+        if (p == null) return;
+        StomachManager mgr = StomachManager.get(p.getServer());
+        Stomach s = mgr.of(p.getUUID());
+        switch (action) {
+            case 0 -> swallow(p, s);
+            case 1 -> {
+                s.hard = !s.hard;
+                p.displayClientMessage(Component.literal(s.hard
+                        ? "Hard mode: contents will be digested for loot."
+                        : "Soft mode: contents are held safely."), true);
+            }
+            case 2 -> {
+                if (!s.contents.isEmpty()) {
+                    release(p, s.contents.remove(s.contents.size() - 1));
+                    playSfx(p, Gulp.RELEASE.get(), SoundEvents.SLIME_SQUISH);
+                }
+            }
+            case 3 -> {
+                if (!s.contents.isEmpty()) {
+                    for (CompoundTag e : s.contents) release(p, e);
+                    s.contents.clear();
+                    playSfx(p, Gulp.RELEASE.get(), SoundEvents.SLIME_SQUISH);
+                }
+            }
+            case 4 -> {
+                int i = indexOf(s, arg);
+                if (i >= 0) {
+                    release(p, s.contents.remove(i));
+                    playSfx(p, Gulp.RELEASE.get(), SoundEvents.SLIME_SQUISH);
+                }
+            }
+            case 5 -> {
+                int i = indexOf(s, arg);
+                if (i >= 0) digest(p, s, s.contents.remove(i));
+            }
+            case 6 -> {
+                Perk perk = Perk.byIndex(arg);
+                if (perk != null && s.points > 0 && s.rank(perk) < perk.maxRank) {
+                    s.ranks[perk.ordinal()]++;
+                    s.points--;
+                    p.level().playSound(null, p.blockPosition(), SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.8f, 1.2f);
+                }
+            }
+            default -> { }
+        }
+        mgr.setDirty();
+        sync(p, s);
+    }
+
+    private static int indexOf(Stomach s, int uid) {
+        for (int i = 0; i < s.contents.size(); i++) {
+            if (s.contents.get(i).getInt("Uid") == uid) return i;
+        }
+        return -1;
+    }
+
+    private static void swallow(ServerPlayer p, Stomach s) {
+        if (s.cooldown > 0) return;
+        Entity target = findTarget(p);
+        if (!(target instanceof LivingEntity le) || target instanceof Player
+                || target instanceof EnderDragon || target instanceof WitherBoss) {
+            p.displayClientMessage(Component.literal("Nothing swallowable in reach."), true);
+            return;
+        }
+        float size = Math.max(0.05f, le.getBbWidth() * le.getBbWidth() * le.getBbHeight());
+        if (size > s.capacity()) {
+            p.displayClientMessage(Component.literal("Too big for your stomach! (needs " + fmt(size) + ", capacity " + fmt(s.capacity()) + ")"), true);
+            return;
+        }
+        if (s.used() + size > s.capacity()) {
+            p.displayClientMessage(Component.literal("Your stomach is too full."), true);
+            return;
+        }
+        le.stopRiding();
+        CompoundTag tag = new CompoundTag();
+        if (!le.save(tag)) return;
+
+        CompoundTag entry = new CompoundTag();
+        entry.put("Entity", tag);
+        entry.putFloat("Size", size);
+        entry.putFloat("MaxHealth", le.getMaxHealth());
+        entry.putInt("Digest", 0);
+        entry.putInt("DigestTime", 100 + (int) (size * 100)); // bigger = slower
+        entry.putString("Name", le.getName().getString());
+        entry.putInt("Uid", p.getRandom().nextInt());
+
+        le.discard();
+        s.contents.add(entry);
+        // Looking up makes swallowing faster.
+        s.cooldown = p.getXRot() < -30 ? 20 : 40;
+        playSfx(p, Gulp.SWALLOW.get(), SoundEvents.GENERIC_EAT);
+        p.displayClientMessage(Component.literal("Gulp! Swallowed " + entry.getString("Name")), true);
+    }
+
+    private static Entity findTarget(ServerPlayer p) {
+        Vec3 start = p.getEyePosition();
+        Vec3 look = p.getViewVector(1.0f);
+        Vec3 end = start.add(look.scale(REACH));
+        AABB box = p.getBoundingBox().expandTowards(look.scale(REACH)).inflate(1.0);
+        EntityHitResult hit = ProjectileUtil.getEntityHitResult(p, start, end, box,
+                e -> !e.isSpectator() && e.isPickable() && e != p, REACH * REACH);
+        return hit == null ? null : hit.getEntity();
+    }
+
+    // ------------------------------------------------------------ per-tick
+
+    public static void tickPlayer(StomachManager mgr, ServerPlayer p, Stomach s) {
+        if (s.cooldown > 0) s.cooldown--;
+        if (s.contents.isEmpty()) return;
+
+        boolean changed = false;
+        int healAmount = s.rank(Perk.HEALING);
+        Iterator<CompoundTag> it = s.contents.iterator();
+        while (it.hasNext()) {
+            CompoundTag e = it.next();
+            if (s.hard) {
+                int d = e.getInt("Digest") + 1;
+                e.putInt("Digest", d);
+                if (d >= e.getInt("DigestTime")) {
+                    it.remove();
+                    digest(p, s, e);
+                    changed = true;
+                }
+            } else {
+                // Soft mode still earns XP (holding things is progress too).
+                if (p.tickCount % 20 == 0) {
+                    if (s.addXp(1) > 0) levelUp(p, s);
+                }
+                // Healing Stomach perk
+                if (healAmount > 0 && p.tickCount % 100 == 0) {
+                    CompoundTag ent = e.getCompound("Entity");
+                    ent.putFloat("Health", Math.min(e.getFloat("MaxHealth"), ent.getFloat("Health") + healAmount));
+                }
+            }
+        }
+
+        // Hard mode: things fight back. Armor reduces this. Never lethal on its own.
+        if (s.hard && !s.contents.isEmpty() && p.tickCount % 80 == 0 && p.getHealth() > 4f) {
+            p.hurt(p.level().damageSources().generic(), 0.5f * s.contents.size());
+        }
+
+        if (p.tickCount % 20 == 0) mgr.setDirty();
+        if (changed || p.tickCount % 10 == 0) sync(p, s);
+    }
+
+    private static void digest(ServerPlayer p, Stomach s, CompoundTag entry) {
+        ServerLevel w = p.serverLevel();
+        // Rich Digestion perk
+        float bonusChance = 0.15f * s.rank(Perk.RICH);
+        int copies = 1 + (p.getRandom().nextFloat() < bonusChance ? 1 : 0);
+        for (int i = 0; i < copies; i++) {
+            EntityType.create(entry.getCompound("Entity"), w).ifPresent(e -> {
+                e.setUUID(UUID.randomUUID());
+                e.moveTo(p.getX(), p.getY(), p.getZ(), 0f, 0f);
+                w.addFreshEntity(e);
+                // Credit the kill to the player so loot tables (and Looting-style bonuses) apply.
+                if (e instanceof LivingEntity le) le.hurt(w.damageSources().playerAttack(p), 10000f);
+                else e.discard();
+            });
+        }
+        playSfx(p, Gulp.DIGEST.get(), SoundEvents.PLAYER_BURP);
+        if (s.addXp(20 + (int) (entry.getFloat("Size") * 10)) > 0) levelUp(p, s);
+    }
+
+    public static void release(ServerPlayer p, CompoundTag entry) {
+        ServerLevel w = p.serverLevel();
+        EntityType.create(entry.getCompound("Entity"), w).ifPresent(e -> {
+            Vec3 fwd = p.getViewVector(1.0f).scale(1.5);
+            e.moveTo(p.getX() + fwd.x, p.getY() + 0.5, p.getZ() + fwd.z, p.getYRot() + 180f, 0f);
+            w.addFreshEntity(e);
+        });
+    }
+
+    /** Called when a player dies: let everything out so nothing is lost. */
+    public static void releaseAll(ServerPlayer p) {
+        StomachManager mgr = StomachManager.get(p.getServer());
+        Stomach s = mgr.of(p.getUUID());
+        for (CompoundTag e : s.contents) release(p, e);
+        s.contents.clear();
+        mgr.setDirty();
+        sync(p, s);
+    }
+
+    private static void levelUp(ServerPlayer p, Stomach s) {
+        p.level().playSound(null, p.blockPosition(), SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 0.7f, 1f);
+        p.sendSystemMessage(Component.literal("Stomach reached level " + s.level + "! You have " + s.points
+                + " perk point" + (s.points == 1 ? "" : "s") + " to spend (open the stomach screen)."));
+    }
+
+    // ------------------------------------------------------------ helpers
+
+    private static void playSfx(ServerPlayer p, SoundEvent custom, SoundEvent vanillaFallback) {
+        p.level().playSound(null, p.blockPosition(), Gulp.CUSTOM_SFX ? custom : vanillaFallback, SoundSource.PLAYERS, 1f, 1f);
+    }
+
+    private static String fmt(double d) { return String.format("%.1f", d); }
+
+    public static void sync(ServerPlayer p, Stomach s) {
+        for (CompoundTag e : s.contents) {
+            if (!e.contains("Uid")) e.putInt("Uid", p.getRandom().nextInt()); // older entries
+        }
+        Net.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), SyncPacket.from(s));
+
+        // Tell this player and everyone who can see them how full the belly is.
+        float ratio = (float) Math.min(1.0, s.used() / s.capacity());
+        Net.CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> p), new BellyPacket(p.getUUID(), ratio));
+    }
+}

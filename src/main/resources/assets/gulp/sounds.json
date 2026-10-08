@@ -1,0 +1,5 @@
+{
+  "swallow": { "sounds": ["gulp:swallow1", "gulp:swallow2", "gulp:swallow3"] },
+  "digest":  { "sounds": ["gulp:digest1", "gulp:digest2"] },
+  "release": { "sounds": ["gulp:release1"] }
+}
