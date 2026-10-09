@@ -8,10 +8,9 @@ import net.minecraft.network.chat.Component;
 /** Client-side settings. Saved to config/gulp-client.properties. */
 public class SettingsScreen extends Screen {
     private static final int W = 250;
-    private static final int H = 200;
+    private static final int H = 128;
 
-    private Button bellyButton, levelUpButton, soundSetButton;
-    private final Button[] soundButtons = new Button[GulpSound.values().length];
+    private Button bellyButton, levelUpButton;
 
     public SettingsScreen() {
         super(Component.literal("Gulp Settings"));
@@ -20,19 +19,9 @@ public class SettingsScreen extends Screen {
     private int left() { return (width - W) / 2; }
     private int top() { return (height - H) / 2; }
 
-    private static String onOff(boolean on) { return on ? "ON" : "OFF"; }
-
-    /** Updates every button's label (and greys out the ones that don't apply). */
     private void refresh() {
         bellyButton.setMessage(Component.literal("Belly style: " + GulpConfig.bellyStyle.label));
-        levelUpButton.setMessage(Component.literal("Level-up messages: " + onOff(GulpConfig.levelUpMessages)));
-        soundSetButton.setMessage(Component.literal("Sounds: " + (GulpConfig.useCustomSounds ? "Custom" : "Minecraft")));
-        for (GulpSound sound : GulpSound.values()) {
-            Button b = soundButtons[sound.ordinal()];
-            b.setMessage(Component.literal(sound.label + ": " + onOff(GulpConfig.isOn(sound))));
-            // The screen music only exists in the custom sound set.
-            if (sound == GulpSound.SCREEN_LOOP) b.active = GulpConfig.useCustomSounds;
-        }
+        levelUpButton.setMessage(Component.literal("Level-up messages: " + (GulpConfig.levelUpMessages ? "ON" : "OFF")));
     }
 
     @Override
@@ -53,35 +42,10 @@ public class SettingsScreen extends Screen {
             refresh();
         }).bounds(x + 15, y + 46, W - 30, 20).build();
 
-        soundSetButton = Button.builder(Component.empty(), btn -> {
-            GulpConfig.useCustomSounds = !GulpConfig.useCustomSounds;
-            GulpConfig.save();
-            ScreenLoop.refresh();
-            refresh();
-        }).bounds(x + 15, y + 70, W - 30, 20).build();
-
         addRenderableWidget(bellyButton);
         addRenderableWidget(levelUpButton);
-        addRenderableWidget(soundSetButton);
-
-        // One on/off button per sound: two per row, the last one full width.
-        GulpSound[] all = GulpSound.values();
-        int half = (W - 30 - 4) / 2;
-        for (int i = 0; i < all.length; i++) {
-            GulpSound sound = all[i];
-            int row = i / 2;
-            boolean alone = i == all.length - 1 && all.length % 2 == 1;
-            int bx = alone ? x + 15 : x + 15 + (i % 2) * (half + 4);
-            int bw = alone ? W - 30 : half;
-            Button b = Button.builder(Component.empty(), btn -> {
-                GulpConfig.setOn(sound, !GulpConfig.isOn(sound));
-                GulpConfig.save();
-                if (sound == GulpSound.SCREEN_LOOP) ScreenLoop.refresh();
-                refresh();
-            }).bounds(bx, y + 94 + row * 24, bw, 20).build();
-            soundButtons[sound.ordinal()] = b;
-            addRenderableWidget(b);
-        }
+        addRenderableWidget(Button.builder(Component.literal("Sounds..."), btn -> this.minecraft.setScreen(new SoundsScreen()))
+                .bounds(x + 15, y + 70, W - 30, 20).build());
 
         addRenderableWidget(Button.builder(Component.literal("Back"), btn -> this.minecraft.setScreen(new StomachScreen()))
                 .bounds(x + 8, y + H - 28, 60, 20).build());

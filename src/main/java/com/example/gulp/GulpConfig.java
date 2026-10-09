@@ -33,6 +33,13 @@ public class GulpConfig {
     private static final boolean[] SOUND_ON = new boolean[GulpSound.values().length];
     static { java.util.Arrays.fill(SOUND_ON, true); }
 
+    /** Per-sound volume: 0.0 = silent, 1.0 = normal (100%), 2.0 = double (200%). */
+    private static final float[] SOUND_VOLUME = new float[GulpSound.values().length];
+    static { java.util.Arrays.fill(SOUND_VOLUME, 1.0f); }
+
+    public static float volume(GulpSound s) { return SOUND_VOLUME[s.ordinal()]; }
+    public static void setVolume(GulpSound s, float v) { SOUND_VOLUME[s.ordinal()] = Math.max(0f, Math.min(2f, v)); }
+
     public static boolean isOn(GulpSound s) { return SOUND_ON[s.ordinal()]; }
     public static void setOn(GulpSound s, boolean on) { SOUND_ON[s.ordinal()] = on; }
 
@@ -53,6 +60,7 @@ public class GulpConfig {
             useCustomSounds = Boolean.parseBoolean(props.getProperty("customSounds", "true"));
             for (GulpSound s : GulpSound.values()) {
                 setOn(s, Boolean.parseBoolean(props.getProperty("sound." + s.name(), "true")));
+                setVolume(s, Float.parseFloat(props.getProperty("volume." + s.name(), "1.0")));
             }
         } catch (Exception ignored) {
             // Bad or missing file: keep defaults.
@@ -65,7 +73,10 @@ public class GulpConfig {
             props.setProperty("bellyStyle", bellyStyle.name());
             props.setProperty("levelUpMessages", Boolean.toString(levelUpMessages));
             props.setProperty("customSounds", Boolean.toString(useCustomSounds));
-            for (GulpSound s : GulpSound.values()) props.setProperty("sound." + s.name(), Boolean.toString(isOn(s)));
+            for (GulpSound s : GulpSound.values()) {
+                props.setProperty("sound." + s.name(), Boolean.toString(isOn(s)));
+                props.setProperty("volume." + s.name(), Float.toString(volume(s)));
+            }
             try (OutputStream out = Files.newOutputStream(file())) {
                 props.store(out, "Gulp client settings");
             }

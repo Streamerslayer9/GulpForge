@@ -43,8 +43,14 @@ The sounds are in src/main/resources/assets/gulp/sounds/ (.ogg) and wired up in 
 - Swallow: the 12 gulp*_*.ogg files (random each time) - Spit out: dropping1-3 (random) - Digestion (mob digests on its own): digestion1-3 (random)
 - Digest button (stomach screen): digestion_button - Screen music (loops quietly, as background ambience, on the stomach,
   perks and settings screens): screen_loop. Its volume is VOLUME in ScreenLoopSound.java (0.0 - 1.0).
-Settings has a "Sounds: Custom / Minecraft" switch (Minecraft = the vanilla stand-in sounds) and an ON/OFF button per sound.
-Every player's choice is their own (saved in config/gulp-client.properties).
+Settings > Sounds has a "Sounds: Custom / Minecraft" switch (Minecraft = the vanilla stand-in sounds), an ON/OFF
+button and a 0% - 200% volume slider for each sound (100% is the middle; drag to hear a preview). Every player's
+choice is their own (saved in config/gulp-client.properties).
+Minecraft can't play a file louder than it was recorded, so each effect also has a "_loud" twin (+6 dB, exactly
+double the amplitude) that the slider switches to above 100%. If you replace a sound, make its _loud twin too
+(gain it by 6 dB through a soft limiter) and keep the same file name plus "_loud".
+The Minecraft stand-in sounds can't go above 100%. The screen music is quieter by design: its 100% is BASE_VOLUME in
+ScreenLoopSound.java.
 To replace a sound, convert it to .ogg (mono for in-world sounds) and keep the same file name.
 
 ## Art hooks

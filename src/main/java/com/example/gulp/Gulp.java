@@ -21,6 +21,13 @@ public class Gulp {
     public static final RegistryObject<SoundEvent> DIGEST_BUTTON = sound("digest_button");
     public static final RegistryObject<SoundEvent> SCREEN_LOOP = sound("screen_loop");
 
+    // Louder twins (+6 dB) of the effects above. Minecraft can't play a file louder than it was recorded,
+    // so volume settings above 100% switch to these. See ClientSounds.
+    public static final RegistryObject<SoundEvent> SWALLOW_LOUD = sound("swallow_loud");
+    public static final RegistryObject<SoundEvent> RELEASE_LOUD = sound("release_loud");
+    public static final RegistryObject<SoundEvent> DIGEST_LOUD = sound("digest_loud");
+    public static final RegistryObject<SoundEvent> DIGEST_BUTTON_LOUD = sound("digest_button_loud");
+
     private static RegistryObject<SoundEvent> sound(String name) {
         return SOUNDS.register(name, () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(ID, name)));
     }
