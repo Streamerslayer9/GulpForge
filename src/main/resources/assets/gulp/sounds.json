@@ -1,17 +1,45 @@
 {
   "swallow": {
-    "sounds": ["gulp:swallow1", "gulp:swallow2", "gulp:swallow3"]
+    "sounds": [
+      "gulp:gulp1_nasally",
+      "gulp:gulp3_nasalhard",
+      "gulp:gulp5_solidish",
+      "gulp:gulp6_liquid",
+      "gulp:gulp7_hard",
+      "gulp:gulp8_hardchug",
+      "gulp:gulp8_smoothliquidy",
+      "gulp:gulp9_hardchugy",
+      "gulp:gulp9_liquidnasal",
+      "gulp:gulp10_verydirect",
+      "gulp:gulp11_weirddeep",
+      "gulp:gulp12_weirddeep"
+    ]
   },
   "release": {
-    "sounds": ["gulp:dropping1", "gulp:dropping2", "gulp:dropping3"]
+    "sounds": [
+      "gulp:dropping1",
+      "gulp:dropping2",
+      "gulp:dropping3"
+    ]
   },
   "digest": {
-    "sounds": ["gulp:digestion1", "gulp:digestion2", "gulp:digestion3"]
+    "sounds": [
+      "gulp:digestion1",
+      "gulp:digestion2",
+      "gulp:digestion3"
+    ]
   },
   "digest_button": {
-    "sounds": ["gulp:digestion_button"]
+    "sounds": [
+      "gulp:digestion_button"
+    ]
   },
   "screen_loop": {
-    "sounds": [{ "name": "gulp:screen_loop", "stream": true }]
+    "sounds": [
+      {
+        "name": "gulp:screen_loop",
+        "stream": true
+      }
+    ]
   }
 }

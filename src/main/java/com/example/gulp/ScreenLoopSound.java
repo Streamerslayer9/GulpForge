@@ -7,8 +7,8 @@ import net.minecraft.sounds.SoundSource;
 
 /** The looping stomach-screen music. Stops by itself as soon as none of the three Gulp screens is open. */
 public class ScreenLoopSound extends AbstractTickableSoundInstance {
-    /** How loud the loop is (0.0 - 1.0). */
-    private static final float VOLUME = 0.6f;
+    /** How loud the loop is (0.0 - 1.0). Kept low so it sits in the background as ambience. */
+    private static final float VOLUME = 0.25f;
 
     public ScreenLoopSound() {
         super(Gulp.SCREEN_LOOP.get(), SoundSource.PLAYERS, SoundInstance.createUnseededRandom());

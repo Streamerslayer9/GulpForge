@@ -40,8 +40,9 @@ Custom player model mods can read the fullness (0..1) from ClientState.bellyAmou
 
 ## Sounds
 The sounds are in src/main/resources/assets/gulp/sounds/ (.ogg) and wired up in sounds.json:
-- Swallow: swallow1-3 (random each time) - Spit out: dropping1-3 (random) - Digestion (mob digests on its own): digestion1-3 (random)
-- Digest button (stomach screen): digestion_button - Screen music (loops on the stomach, perks and settings screens): screen_loop
+- Swallow: the 12 gulp*_*.ogg files (random each time) - Spit out: dropping1-3 (random) - Digestion (mob digests on its own): digestion1-3 (random)
+- Digest button (stomach screen): digestion_button - Screen music (loops quietly, as background ambience, on the stomach,
+  perks and settings screens): screen_loop. Its volume is VOLUME in ScreenLoopSound.java (0.0 - 1.0).
 Settings has a "Sounds: Custom / Minecraft" switch (Minecraft = the vanilla stand-in sounds) and an ON/OFF button per sound.
 Every player's choice is their own (saved in config/gulp-client.properties).
 To replace a sound, convert it to .ogg (mono for in-world sounds) and keep the same file name.
