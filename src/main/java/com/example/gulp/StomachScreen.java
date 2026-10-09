@@ -49,6 +49,7 @@ public class StomachScreen extends Screen {
 
     @Override
     protected void init() {
+        ScreenLoop.start();
         List<ClientState.EntryInfo> list = ClientState.entries();
         int pages = Math.max(1, (list.size() + ROWS - 1) / ROWS);
         page = Math.max(0, Math.min(page, pages - 1));

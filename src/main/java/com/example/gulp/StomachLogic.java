@@ -55,26 +55,26 @@ public final class StomachLogic {
             case 2 -> {
                 if (!s.contents.isEmpty()) {
                     release(p, s.contents.remove(s.contents.size() - 1));
-                    playSfx(p, Gulp.RELEASE.get(), SoundEvents.SLIME_SQUISH);
+                    sound(p, GulpSound.SPIT);
                 }
             }
             case 3 -> {
                 if (!s.contents.isEmpty()) {
                     for (CompoundTag e : s.contents) release(p, e);
                     s.contents.clear();
-                    playSfx(p, Gulp.RELEASE.get(), SoundEvents.SLIME_SQUISH);
+                    sound(p, GulpSound.SPIT);
                 }
             }
             case 4 -> {
                 int i = indexOf(s, arg);
                 if (i >= 0) {
                     release(p, s.contents.remove(i));
-                    playSfx(p, Gulp.RELEASE.get(), SoundEvents.SLIME_SQUISH);
+                    sound(p, GulpSound.SPIT);
                 }
             }
             case 5 -> {
                 int i = indexOf(s, arg);
-                if (i >= 0) digest(p, s, s.contents.remove(i));
+                if (i >= 0) digest(p, s, s.contents.remove(i), true);
             }
             case 6 -> {
                 Perk perk = Perk.byIndex(arg);
@@ -138,7 +138,7 @@ public final class StomachLogic {
         s.contents.add(entry);
         // Quick Gulp perk: looking up makes swallowing faster.
         s.cooldown = p.getXRot() < -30 ? Math.max(10, 40 - 6 * s.rank(Perk.QUICK)) : 40;
-        playSfx(p, Gulp.SWALLOW.get(), SoundEvents.GENERIC_EAT);
+        sound(p, GulpSound.SWALLOW);
         p.displayClientMessage(Component.literal("Gulp! Swallowed " + entry.getString("Name")), true);
     }
 
@@ -158,7 +158,7 @@ public final class StomachLogic {
                 e.putInt("Digest", d);
                 if (d >= e.getInt("DigestTime")) {
                     it.remove();
-                    digest(p, s, e);
+                    digest(p, s, e, false);
                     changed = true;
                 } else if (p.tickCount % 20 == 0 && p.getHealth() > 4f
                         && p.getRandom().nextFloat() < STRUGGLE_CHANCE_PER_SECOND) {
@@ -193,7 +193,8 @@ public final class StomachLogic {
         if (changed || p.tickCount % 10 == 0) sync(p, s);
     }
 
-    private static void digest(ServerPlayer p, Stomach s, CompoundTag entry) {
+    /** @param manual true when the player used the Digest button on the stomach screen */
+    private static void digest(ServerPlayer p, Stomach s, CompoundTag entry, boolean manual) {
         ServerLevel w = p.serverLevel();
         int looting = s.rank(Perk.RICH); // Rich Digestion perk = extra Looting levels
         EntityType.create(entry.getCompound("Entity"), w).ifPresent(e -> {
@@ -212,7 +213,7 @@ public final class StomachLogic {
                 e.discard();
             }
         });
-        playSfx(p, Gulp.DIGEST.get(), SoundEvents.PLAYER_BURP);
+        sound(p, manual ? GulpSound.DIGEST_BUTTON : GulpSound.DIGEST);
         if (s.addXp(Stomach.digestXp(entry.getFloat("MaxHealth"))) > 0) levelUp(p, s);
     }
 
@@ -243,8 +244,10 @@ public final class StomachLogic {
 
     // ------------------------------------------------------------ helpers
 
-    private static void playSfx(ServerPlayer p, SoundEvent custom, SoundEvent vanillaFallback) {
-        p.level().playSound(null, p.blockPosition(), Gulp.CUSTOM_SFX ? custom : vanillaFallback, SoundSource.PLAYERS, 1f, 1f);
+    /** Tells the player (and anyone nearby) to play a sound. Each client chooses what it actually plays. */
+    private static void sound(ServerPlayer p, GulpSound type) {
+        Net.CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> p),
+                new SoundPacket(type.ordinal(), p.getX(), p.getY(), p.getZ()));
     }
 
     private static String fmt(double d) { return String.format("%.1f", d); }

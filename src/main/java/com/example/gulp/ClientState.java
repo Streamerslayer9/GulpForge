@@ -40,6 +40,15 @@ public final class ClientState {
         if (levelUpListener != null) levelUpListener.accept(level, points);
     }
 
+    /** Plays a Gulp sound on this client. Set by client setup (see ClientSounds). */
+    public interface SoundListener { void play(int type, double x, double y, double z); }
+
+    public static SoundListener soundListener;
+
+    public static void firePlaySound(int type, double x, double y, double z) {
+        if (soundListener != null) soundListener.play(type, x, y, z);
+    }
+
     public static boolean isHard() { return hard; }
     public static int level() { return level; }
     public static int xp() { return xp; }

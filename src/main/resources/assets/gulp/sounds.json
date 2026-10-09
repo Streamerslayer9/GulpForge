@@ -1,5 +1,17 @@
 {
-  "swallow": { "sounds": ["gulp:swallow1", "gulp:swallow2", "gulp:swallow3"] },
-  "digest":  { "sounds": ["gulp:digest1", "gulp:digest2"] },
-  "release": { "sounds": ["gulp:release1"] }
+  "swallow": {
+    "sounds": ["gulp:swallow1", "gulp:swallow2", "gulp:swallow3"]
+  },
+  "release": {
+    "sounds": ["gulp:dropping1", "gulp:dropping2", "gulp:dropping3"]
+  },
+  "digest": {
+    "sounds": ["gulp:digestion1", "gulp:digestion2", "gulp:digestion3"]
+  },
+  "digest_button": {
+    "sounds": ["gulp:digestion_button"]
+  },
+  "screen_loop": {
+    "sounds": [{ "name": "gulp:screen_loop", "stream": true }]
+  }
 }

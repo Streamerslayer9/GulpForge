@@ -40,6 +40,7 @@ public class PerksScreen extends Screen {
 
     @Override
     protected void init() {
+        ScreenLoop.start();
         lastSig = ClientState.signature();
         int x = left();
         int y = top();

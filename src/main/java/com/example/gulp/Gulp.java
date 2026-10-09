@@ -14,13 +14,12 @@ import net.minecraftforge.registries.RegistryObject;
 public class Gulp {
     public static final String ID = "gulp";
 
-    /** Set to true once you've dropped your .ogg files into assets/gulp/sounds/ (see sounds.json). */
-    public static final boolean CUSTOM_SFX = false;
-
     public static final DeferredRegister<SoundEvent> SOUNDS = DeferredRegister.create(ForgeRegistries.SOUND_EVENTS, ID);
     public static final RegistryObject<SoundEvent> SWALLOW = sound("swallow");
     public static final RegistryObject<SoundEvent> DIGEST = sound("digest");
     public static final RegistryObject<SoundEvent> RELEASE = sound("release");
+    public static final RegistryObject<SoundEvent> DIGEST_BUTTON = sound("digest_button");
+    public static final RegistryObject<SoundEvent> SCREEN_LOOP = sound("screen_loop");
 
     private static RegistryObject<SoundEvent> sound(String name) {
         return SOUNDS.register(name, () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(ID, name)));

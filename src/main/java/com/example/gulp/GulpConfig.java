@@ -28,6 +28,14 @@ public class GulpConfig {
     public static BellyStyle bellyStyle = BellyStyle.STOMACH;
     public static boolean levelUpMessages = true;
 
+    /** true = the mod's own sounds, false = the Minecraft stand-in sounds. */
+    public static boolean useCustomSounds = true;
+    private static final boolean[] SOUND_ON = new boolean[GulpSound.values().length];
+    static { java.util.Arrays.fill(SOUND_ON, true); }
+
+    public static boolean isOn(GulpSound s) { return SOUND_ON[s.ordinal()]; }
+    public static void setOn(GulpSound s, boolean on) { SOUND_ON[s.ordinal()] = on; }
+
     private static Path file() {
         return FMLPaths.CONFIGDIR.get().resolve("gulp-client.properties");
     }
@@ -42,6 +50,10 @@ public class GulpConfig {
             }
             bellyStyle = BellyStyle.valueOf(props.getProperty("bellyStyle", BellyStyle.STOMACH.name()));
             levelUpMessages = Boolean.parseBoolean(props.getProperty("levelUpMessages", "true"));
+            useCustomSounds = Boolean.parseBoolean(props.getProperty("customSounds", "true"));
+            for (GulpSound s : GulpSound.values()) {
+                setOn(s, Boolean.parseBoolean(props.getProperty("sound." + s.name(), "true")));
+            }
         } catch (Exception ignored) {
             // Bad or missing file: keep defaults.
         }
@@ -52,6 +64,8 @@ public class GulpConfig {
             Properties props = new Properties();
             props.setProperty("bellyStyle", bellyStyle.name());
             props.setProperty("levelUpMessages", Boolean.toString(levelUpMessages));
+            props.setProperty("customSounds", Boolean.toString(useCustomSounds));
+            for (GulpSound s : GulpSound.values()) props.setProperty("sound." + s.name(), Boolean.toString(isOn(s)));
             try (OutputStream out = Files.newOutputStream(file())) {
                 props.store(out, "Gulp client settings");
             }

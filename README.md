@@ -38,7 +38,13 @@ Tweak MAX_EXTRA_DEPTH / MAX_EXTRA_WIDTH in BellyLayer.java for how far it sticks
 BELLY_TOP / BELLY_HEIGHT in BellyModel.java for the stomach-only shape.
 Custom player model mods can read the fullness (0..1) from ClientState.bellyAmount(playerUuid).
 
-## Art/sound hooks
+## Sounds
+The sounds are in src/main/resources/assets/gulp/sounds/ (.ogg) and wired up in sounds.json:
+- Swallow: swallow1-3 (random each time) - Spit out: dropping1-3 (random) - Digestion (mob digests on its own): digestion1-3 (random)
+- Digest button (stomach screen): digestion_button - Screen music (loops on the stomach, perks and settings screens): screen_loop
+Settings has a "Sounds: Custom / Minecraft" switch (Minecraft = the vanilla stand-in sounds) and an ON/OFF button per sound.
+Every player's choice is their own (saved in config/gulp-client.properties).
+To replace a sound, convert it to .ogg (mono for in-world sounds) and keep the same file name.
+
+## Art hooks
 - HUD is drawn with plain rectangles in GulpHud.java; perk icons are in PerksScreen.iconFor().
-- Drop .ogg files in src/main/resources/assets/gulp/sounds/ named swallow1-3, digest1-2, release1,
-  then set CUSTOM_SFX = true in Gulp.java. (Vanilla sounds are used until then.)
