@@ -26,8 +26,10 @@ import java.util.UUID;
 public final class StomachLogic {
     /** Hard mode only: each swallowed mob has this chance every second to struggle and hurt you. */
     private static final float STRUGGLE_CHANCE_PER_SECOND = 0.08f;
-    /** Damage of one struggle (1.0 = half a heart), before armor and Iron Stomach. */
-    private static final float STRUGGLE_DAMAGE = 1.0f;
+    /** Struggle damage = base + per-volume x the mob's size, capped (2.0 = one heart), before armor and Iron Stomach. */
+    private static final float STRUGGLE_BASE_DAMAGE = 2.0f;
+    private static final float STRUGGLE_PER_VOLUME = 0.75f;
+    private static final float STRUGGLE_MAX_DAMAGE = 5.0f;
 
     /** Extra Looting levels applied to the mob being digested right now (see ServerEvents.onLooting). */
     private static int pendingLooting = 0;
@@ -135,7 +137,7 @@ public final class StomachLogic {
         le.discard();
         s.contents.add(entry);
         // Quick Gulp perk: looking up makes swallowing faster.
-        s.cooldown = p.getXRot() < -30 ? Math.max(5, 40 - 10 * s.rank(Perk.QUICK)) : 40;
+        s.cooldown = p.getXRot() < -30 ? Math.max(10, 40 - 6 * s.rank(Perk.QUICK)) : 40;
         playSfx(p, Gulp.SWALLOW.get(), SoundEvents.GENERIC_EAT);
         p.displayClientMessage(Component.literal("Gulp! Swallowed " + entry.getString("Name")), true);
     }
@@ -161,8 +163,11 @@ public final class StomachLogic {
                 } else if (p.tickCount % 20 == 0 && p.getHealth() > 4f
                         && p.getRandom().nextFloat() < STRUGGLE_CHANCE_PER_SECOND) {
                     // Hard mode only, and only now and then: the mob fights back.
-                    // Armor reduces it, Iron Stomach reduces it by 25% per rank, and it can't kill you.
-                    float damage = STRUGGLE_DAMAGE * Math.max(0f, 1f - 0.25f * s.rank(Perk.IRON));
+                    // Bigger mobs hit harder. Armor reduces it, Iron Stomach reduces it by 15% per rank,
+                    // and it can't kill you (it stops at 2 hearts).
+                    float strength = Math.min(STRUGGLE_MAX_DAMAGE,
+                            STRUGGLE_BASE_DAMAGE + STRUGGLE_PER_VOLUME * e.getFloat("Size"));
+                    float damage = strength * Math.max(0f, 1f - 0.15f * s.rank(Perk.IRON));
                     if (damage > 0f) {
                         p.hurt(p.level().damageSources().generic(), damage);
                         p.displayClientMessage(Component.literal(e.getString("Name") + " struggles inside you!"), true);
@@ -232,8 +237,8 @@ public final class StomachLogic {
 
     private static void levelUp(ServerPlayer p, Stomach s) {
         p.level().playSound(null, p.blockPosition(), SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 0.7f, 1f);
-        p.sendSystemMessage(Component.literal("Stomach reached level " + s.level + "! You have " + s.points
-                + " perk point" + (s.points == 1 ? "" : "s") + " to spend (open the stomach screen)."));
+        // The message itself is shown by the client, so each player can turn it off in Settings.
+        Net.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), new LevelUpPacket(s.level, s.points));
     }
 
     // ------------------------------------------------------------ helpers

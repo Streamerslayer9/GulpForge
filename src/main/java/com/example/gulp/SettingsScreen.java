@@ -8,7 +8,7 @@ import net.minecraft.network.chat.Component;
 /** Client-side settings. Saved to config/gulp-client.properties. */
 public class SettingsScreen extends Screen {
     private static final int W = 250;
-    private static final int H = 120;
+    private static final int H = 118;
 
     public SettingsScreen() {
         super(Component.literal("Gulp Settings"));
@@ -31,10 +31,23 @@ public class SettingsScreen extends Screen {
                         })
                 .bounds(x + 15, y + 32, W - 30, 20).build());
 
+        addRenderableWidget(Button.builder(
+                        Component.literal(levelUpLabel()),
+                        btn -> {
+                            GulpConfig.levelUpMessages = !GulpConfig.levelUpMessages;
+                            GulpConfig.save();
+                            btn.setMessage(Component.literal(levelUpLabel()));
+                        })
+                .bounds(x + 15, y + 58, W - 30, 20).build());
+
         addRenderableWidget(Button.builder(Component.literal("Back"), btn -> this.minecraft.setScreen(new StomachScreen()))
                 .bounds(x + 8, y + H - 28, 60, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Close"), btn -> onClose())
                 .bounds(x + W - 68, y + H - 28, 60, 20).build());
+    }
+
+    private static String levelUpLabel() {
+        return "Level-up messages: " + (GulpConfig.levelUpMessages ? "ON" : "OFF");
     }
 
     @Override
@@ -55,12 +68,6 @@ public class SettingsScreen extends Screen {
         g.fill(x + W - 1, y, x + W, y + H, 0xFF666666);
 
         g.drawString(font, "Settings", x + 8, y + 8, 0xFFFFFF, true);
-
-        String hint = GulpConfig.bellyStyle == GulpConfig.BellyStyle.CLASSIC
-                ? "The whole torso swells forward."
-                : "Only the lower stomach swells; the chest stays flat.";
-        g.drawString(font, hint, x + 15, y + 58, 0x999999, false);
-        g.drawString(font, "This only changes how bellies look on your screen.", x + 15, y + 70, 0x777777, false);
 
         super.render(g, mouseX, mouseY, partialTick);
     }

@@ -2,6 +2,8 @@ package com.example.gulp;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import net.minecraft.client.model.geom.ModelLayerLocation;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.player.PlayerRenderer;
@@ -32,6 +34,12 @@ public final class ClientModEvents {
     @SubscribeEvent
     public static void onClientSetup(FMLClientSetupEvent e) {
         GulpConfig.load();
+        ClientState.levelUpListener = (level, points) -> {
+            if (!GulpConfig.levelUpMessages) return;
+            Minecraft mc = Minecraft.getInstance();
+            mc.gui.getChat().addMessage(Component.literal("Stomach reached level " + level + "! You have " + points
+                    + " perk point" + (points == 1 ? "" : "s") + " to spend (open the stomach screen)."));
+        };
     }
 
     @SubscribeEvent

@@ -10,7 +10,7 @@ import java.util.List;
 /** One player's stomach. Each entry in `contents` is an NBT compound:
  *  Entity (full saved mob), Size, MaxHealth, Digest, DigestTime, Name, Uid */
 public class Stomach {
-    public static final int MAX_LEVEL = 15;
+    public static final int MAX_LEVEL = 20;
 
     /** Soft mode: XP per second for every 1.0 of mob volume you're holding. */
     public static final float SOFT_XP_PER_VOLUME_SECOND = 0.5f;

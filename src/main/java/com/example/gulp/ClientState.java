@@ -33,6 +33,13 @@ public final class ClientState {
         entries = m.entries;
     }
 
+    /** Set by client setup; shows the level-up chat message if the player has it turned on. */
+    public static java.util.function.BiConsumer<Integer, Integer> levelUpListener;
+
+    public static void fireLevelUp(int level, int points) {
+        if (levelUpListener != null) levelUpListener.accept(level, points);
+    }
+
     public static boolean isHard() { return hard; }
     public static int level() { return level; }
     public static int xp() { return xp; }

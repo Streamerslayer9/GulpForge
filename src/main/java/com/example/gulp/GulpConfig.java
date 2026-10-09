@@ -26,6 +26,7 @@ public class GulpConfig {
     }
 
     public static BellyStyle bellyStyle = BellyStyle.STOMACH;
+    public static boolean levelUpMessages = true;
 
     private static Path file() {
         return FMLPaths.CONFIGDIR.get().resolve("gulp-client.properties");
@@ -40,6 +41,7 @@ public class GulpConfig {
                 props.load(in);
             }
             bellyStyle = BellyStyle.valueOf(props.getProperty("bellyStyle", BellyStyle.STOMACH.name()));
+            levelUpMessages = Boolean.parseBoolean(props.getProperty("levelUpMessages", "true"));
         } catch (Exception ignored) {
             // Bad or missing file: keep defaults.
         }
@@ -49,6 +51,7 @@ public class GulpConfig {
         try {
             Properties props = new Properties();
             props.setProperty("bellyStyle", bellyStyle.name());
+            props.setProperty("levelUpMessages", Boolean.toString(levelUpMessages));
             try (OutputStream out = Files.newOutputStream(file())) {
                 props.store(out, "Gulp client settings");
             }

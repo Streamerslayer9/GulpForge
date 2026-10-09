@@ -20,12 +20,13 @@ Install Minecraft Forge for 1.20.1, then put gulp-0.1.0.jar in the mods folder. 
 ## Mechanics
 - Capacity is based on mob volume (width * width * height). Chicken ~0.1, villager ~0.7, cow ~1.1, horse ~3, iron golem ~5.
 - Soft mode: mobs are held safely, and you earn slow XP for holding them.
-- Hard mode: mobs digest over time and drop their normal loot; you earn more XP. Now and then (about 8% per mob per second) a mob struggles and hurts you for half a heart. Hard mode only; armor and Iron Stomach reduce it, and it never kills you.
-- Levels go to 15. XP needed per level grows faster than linear (100, 280, 520, 800, 1120 ...).
+- Hard mode: mobs digest over time and drop their normal loot; you earn more XP. Now and then (about 8% per mob per second) a mob struggles and hurts you: 2 HP plus 0.75 per 1.0 of mob volume, capped at 5 HP, so bigger mobs hit harder. Hard mode only; armor and Iron Stomach reduce it, and it never kills you.
+- Levels go to 20 (19 perk points for 25 perk ranks, so players have to choose). XP needed per level grows faster than linear (100, 280, 520, 800, 1120 ...).
   Hard mode: digesting gives 15 + 3 x the mob's max health in XP. Soft mode: 0.5 XP per second per 1.0 of volume held.
 - Level ups raise capacity and give 1 perk point each. Perks (spend points with N > Perks):
-  Roomy Stomach (+capacity), Healing Stomach (soft mode heals held mobs), Rich Digestion (+1 Looting level per rank
-  on digested mobs), Quick Gulp (looking up: shorter swallow cooldown), Iron Stomach (less struggle damage).
+  Every perk has 5 ranks. Roomy Stomach (+1 capacity/rank), Healing Stomach (soft mode: held mobs heal 1 HP per rank
+  every 5s), Better Loot (+1 Looting level per rank on digested mobs, up to Looting V), Quick Gulp (looking up:
+  swallow cooldown -0.3s per rank, down to 0.5s), Iron Stomach (-15% struggle damage per rank, down to 25%).
   Add more in Perk.java (append to the end).
 - Aiming: mobs have a slightly bigger hitbox for swallowing, and aiming near a mob (about 12 degrees) still counts.
 - Stomach contents are saved with the world. Dying releases everything.
