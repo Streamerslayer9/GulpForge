@@ -18,7 +18,7 @@ public class SyncPacket {
 
     public static SyncPacket from(Stomach s) {
         SyncPacket m = new SyncPacket();
-        m.hard = s.hard;
+        m.hard = s.hard && GulpServerConfig.HARD_MODE_ENABLED.get(); // show SOFT if the server has hard mode off
         m.level = s.level;
         m.xp = s.xp;
         m.xpNeeded = Stomach.xpForNext(s.level);

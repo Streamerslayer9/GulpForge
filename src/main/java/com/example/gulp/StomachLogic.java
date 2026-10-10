@@ -4,18 +4,13 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
-import net.minecraft.world.entity.boss.wither.WitherBoss;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.entity.projectile.ProjectileUtil;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.animal.horse.AbstractHorse;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.PacketDistributor;
 
@@ -41,40 +36,51 @@ public final class StomachLogic {
     // 0 swallow | 1 toggle mode | 2 release last | 3 release all
     // 4 release entry (arg = uid) | 5 digest entry now (arg = uid) | 6 buy perk (arg = perk index)
     public static void handleAction(ServerPlayer p, int action, int arg) {
-        if (p == null) return;
+        if (p == null || !p.isAlive() || p.isSpectator()) return;
         StomachManager mgr = StomachManager.get(p.getServer());
         Stomach s = mgr.of(p.getUUID());
         switch (action) {
             case 0 -> swallow(p, s, arg);
             case 1 -> {
-                s.hard = !s.hard;
-                p.displayClientMessage(Component.literal(s.hard
-                        ? "Hard mode: contents will be digested for loot."
-                        : "Soft mode: contents are held safely."), true);
+                if (!s.hard && !hardModeAllowed()) {
+                    p.displayClientMessage(Component.literal("Hard mode is turned off on this server."), true);
+                } else {
+                    s.hard = !s.hard;
+                    p.displayClientMessage(Component.literal(s.hard
+                            ? "Hard mode: contents will be digested for loot."
+                            : "Soft mode: contents are held safely."), true);
+                }
             }
             case 2 -> {
-                if (!s.contents.isEmpty()) {
-                    release(p, s.contents.remove(s.contents.size() - 1));
+                if (!s.contents.isEmpty() && release(p, s.contents.get(s.contents.size() - 1))) {
+                    s.contents.remove(s.contents.size() - 1);
                     sound(p, GulpSound.SPIT);
                 }
             }
             case 3 -> {
-                if (!s.contents.isEmpty()) {
-                    for (CompoundTag e : s.contents) release(p, e);
-                    s.contents.clear();
-                    sound(p, GulpSound.SPIT);
+                boolean any = false;
+                Iterator<CompoundTag> it = s.contents.iterator();
+                while (it.hasNext()) {
+                    if (release(p, it.next())) {
+                        it.remove();
+                        any = true;
+                    }
                 }
+                if (any) sound(p, GulpSound.SPIT);
             }
             case 4 -> {
                 int i = indexOf(s, arg);
-                if (i >= 0) {
-                    release(p, s.contents.remove(i));
+                if (i >= 0 && release(p, s.contents.get(i))) {
+                    s.contents.remove(i);
                     sound(p, GulpSound.SPIT);
                 }
             }
             case 5 -> {
                 int i = indexOf(s, arg);
-                if (i >= 0) digest(p, s, s.contents.remove(i), true);
+                if (i >= 0) {
+                    if (hardModeAllowed()) digest(p, s, s.contents.remove(i), true);
+                    else p.displayClientMessage(Component.literal("Digesting is turned off on this server."), true);
+                }
             }
             case 6 -> {
                 Perk perk = Perk.byIndex(arg);
@@ -110,6 +116,17 @@ public final class StomachLogic {
         if (target == null) target = TargetFinder.find(p, TargetFinder.REACH);
         if (!(target instanceof LivingEntity le)) {
             p.displayClientMessage(Component.literal("Nothing swallowable in reach."), true);
+            return;
+        }
+        // Multiplayer: don't let anyone swallow (or digest) another player's tamed pet or horse.
+        if (le instanceof TamableAnimal pet && pet.isTame() && pet.getOwnerUUID() != null
+                && !pet.getOwnerUUID().equals(p.getUUID())) {
+            p.displayClientMessage(Component.literal("That pet belongs to someone else."), true);
+            return;
+        }
+        if (le instanceof AbstractHorse horse && horse.isTamed() && horse.getOwnerUUID() != null
+                && !horse.getOwnerUUID().equals(p.getUUID())) {
+            p.displayClientMessage(Component.literal("That animal belongs to someone else."), true);
             return;
         }
         float size = Math.max(0.05f, le.getBbWidth() * le.getBbWidth() * le.getBbHeight());
@@ -149,11 +166,12 @@ public final class StomachLogic {
         if (s.contents.isEmpty()) return;
 
         boolean changed = false;
+        boolean hardNow = s.hard && hardModeAllowed();
         int healAmount = s.rank(Perk.HEALING);
         Iterator<CompoundTag> it = s.contents.iterator();
         while (it.hasNext()) {
             CompoundTag e = it.next();
-            if (s.hard) {
+            if (hardNow) {
                 int d = e.getInt("Digest") + 1;
                 e.putInt("Digest", d);
                 if (d >= e.getInt("DigestTime")) {
@@ -164,10 +182,12 @@ public final class StomachLogic {
                         && p.getRandom().nextFloat() < STRUGGLE_CHANCE_PER_SECOND) {
                     // Hard mode only, and only now and then: the mob fights back.
                     // Bigger mobs hit harder. Armor reduces it, Iron Stomach reduces it by 15% per rank,
-                    // and it can't kill you (it stops at 2 hearts).
+                    // and it can never take you below 2 hearts.
                     float strength = Math.min(STRUGGLE_MAX_DAMAGE,
                             STRUGGLE_BASE_DAMAGE + STRUGGLE_PER_VOLUME * e.getFloat("Size"));
-                    float damage = strength * Math.max(0f, 1f - 0.15f * s.rank(Perk.IRON));
+                    float damage = strength * Math.max(0f, 1f - 0.15f * s.rank(Perk.IRON))
+                            * GulpServerConfig.STRUGGLE_DAMAGE_MULTIPLIER.get().floatValue();
+                    damage = Math.min(damage, p.getHealth() - 4f);
                     if (damage > 0f) {
                         p.hurt(p.level().damageSources().generic(), damage);
                         p.displayClientMessage(Component.literal(e.getString("Name") + " struggles inside you!"), true);
@@ -176,10 +196,7 @@ public final class StomachLogic {
             } else {
                 // Soft mode still earns XP (holding things is progress too).
                 if (p.tickCount % 20 == 0) {
-                    float amount = e.getFloat("Size") * Stomach.SOFT_XP_PER_VOLUME_SECOND;
-                    int whole = (int) amount;
-                    if (p.getRandom().nextFloat() < amount - whole) whole++;
-                    if (whole > 0 && s.addXp(whole) > 0) levelUp(p, s);
+                    gainXp(p, s, e.getFloat("Size") * Stomach.SOFT_XP_PER_VOLUME_SECOND);
                 }
                 // Healing Stomach perk
                 if (healAmount > 0 && p.tickCount % 100 == 0) {
@@ -214,24 +231,35 @@ public final class StomachLogic {
             }
         });
         sound(p, manual ? GulpSound.DIGEST_BUTTON : GulpSound.DIGEST);
-        if (s.addXp(Stomach.digestXp(entry.getFloat("MaxHealth"))) > 0) levelUp(p, s);
+        gainXp(p, s, Stomach.digestXp(entry.getFloat("MaxHealth")));
     }
 
-    public static void release(ServerPlayer p, CompoundTag entry) {
+    /** @return false if the mob couldn't be recreated (so the caller keeps it instead of losing it) */
+    public static boolean release(ServerPlayer p, CompoundTag entry) {
         ServerLevel w = p.serverLevel();
-        EntityType.create(entry.getCompound("Entity"), w).ifPresent(e -> {
-            Vec3 fwd = p.getViewVector(1.0f).scale(1.5);
-            e.moveTo(p.getX() + fwd.x, p.getY() + 0.5, p.getZ() + fwd.z, p.getYRot() + 180f, 0f);
-            w.addFreshEntity(e);
-        });
+        Entity e = EntityType.create(entry.getCompound("Entity"), w).orElse(null);
+        if (e == null) return false;
+        Vec3 fwd = p.getViewVector(1.0f).scale(1.5);
+        float yaw = p.getYRot() + 180f;
+        e.moveTo(p.getX() + fwd.x, p.getY() + 0.5, p.getZ() + fwd.z, yaw, 0f);
+        if (!w.noCollision(e)) {
+            // Not enough room in front of you (a wall, say): put it where you're standing instead of inside a block.
+            e.moveTo(p.getX(), p.getY() + 0.1, p.getZ(), yaw, 0f);
+        }
+        e.setDeltaMovement(Vec3.ZERO);
+        e.fallDistance = 0f;
+        if (!w.addFreshEntity(e)) {
+            e.setUUID(UUID.randomUUID()); // an old copy with the same id is still around
+            return w.addFreshEntity(e);
+        }
+        return true;
     }
 
     /** Called when a player dies: let everything out so nothing is lost. */
     public static void releaseAll(ServerPlayer p) {
         StomachManager mgr = StomachManager.get(p.getServer());
         Stomach s = mgr.of(p.getUUID());
-        for (CompoundTag e : s.contents) release(p, e);
-        s.contents.clear();
+        s.contents.removeIf(e -> release(p, e));
         mgr.setDirty();
         sync(p, s);
     }
@@ -248,6 +276,18 @@ public final class StomachLogic {
     private static void sound(ServerPlayer p, GulpSound type) {
         Net.CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> p),
                 new SoundPacket(type.ordinal(), p.getX(), p.getY(), p.getZ()));
+    }
+
+    private static boolean hardModeAllowed() {
+        return GulpServerConfig.HARD_MODE_ENABLED.get();
+    }
+
+    /** Adds XP (scaled by the server's xpMultiplier, with fractions rounded randomly) and handles level-ups. */
+    private static void gainXp(ServerPlayer p, Stomach s, float amount) {
+        float scaled = amount * GulpServerConfig.XP_MULTIPLIER.get().floatValue();
+        int whole = (int) scaled;
+        if (p.getRandom().nextFloat() < scaled - whole) whole++;
+        if (whole > 0 && s.addXp(whole) > 0) levelUp(p, s);
     }
 
     private static String fmt(double d) { return String.format("%.1f", d); }

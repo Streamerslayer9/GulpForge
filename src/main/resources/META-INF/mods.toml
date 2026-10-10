@@ -5,9 +5,11 @@ license="All Rights Reserved"
 [[mods]]
 modId="gulp"
 version="${mod_version}"
-displayName="Gulp"
+displayName="Vore Mod"
+logoFile="logo.png"
+logoBlur=false
 description='''
-Swallow mobs and villagers, carry them in a stomach, and digest them for loot.
+This Mod adds Vore to your world with progression, perks and capacity to carry mobs wherever you want.
 '''
 
 [[dependencies.gulp]]

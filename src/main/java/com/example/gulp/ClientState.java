@@ -49,6 +49,22 @@ public final class ClientState {
         if (soundListener != null) soundListener.play(type, x, y, z);
     }
 
+    /** Forget everything (called when you leave a world/server so nothing carries over to the next one). */
+    public static void reset() {
+        hard = false;
+        level = 1;
+        xp = 0;
+        xpNeeded = Stomach.xpForNext(1);
+        points = 0;
+        used = 0f;
+        cap = 1.75f;
+        ranks = new int[Perk.values().length];
+        entries = new ArrayList<>();
+        BELLY_TARGET.clear();
+        BELLY_SHOWN.clear();
+        BELLY_TIME.clear();
+    }
+
     public static boolean isHard() { return hard; }
     public static int level() { return level; }
     public static int xp() { return xp; }
@@ -71,6 +87,7 @@ public final class ClientState {
     // Custom player models can read this too: ClientState.bellyAmount(uuid)
     private static final Map<UUID, Float> BELLY_TARGET = new HashMap<>();
     private static final Map<UUID, Float> BELLY_SHOWN = new HashMap<>();
+    private static final Map<UUID, Long> BELLY_TIME = new HashMap<>();
 
     public static void setBelly(UUID id, float ratio) { BELLY_TARGET.put(id, ratio); }
 
@@ -80,7 +97,11 @@ public final class ClientState {
     public static float smoothedBelly(UUID id) {
         float target = bellyAmount(id);
         float cur = BELLY_SHOWN.getOrDefault(id, 0f);
-        cur += (target - cur) * 0.04f;
+        // Ease toward the real value over about a third of a second, the same at any frame rate.
+        long now = System.nanoTime();
+        Long last = BELLY_TIME.put(id, now);
+        float seconds = last == null ? 0.016f : Math.min(0.25f, (now - last) / 1.0e9f);
+        cur += (target - cur) * (1f - (float) Math.exp(-seconds / 0.35f));
         if (Math.abs(target - cur) < 0.002f) cur = target;
         BELLY_SHOWN.put(id, cur);
         return cur;

@@ -3,6 +3,7 @@ package com.example.gulp;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
 import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -11,6 +12,13 @@ import net.minecraftforge.fml.common.Mod;
 @Mod.EventBusSubscriber(modid = Gulp.ID, value = Dist.CLIENT)
 public final class ClientForgeEvents {
     private ClientForgeEvents() { }
+
+    /** Leaving a world or server: stop the music and forget the old stomach so it doesn't leak into the next one. */
+    @SubscribeEvent
+    public static void onLogout(ClientPlayerNetworkEvent.LoggingOut e) {
+        ClientState.reset();
+        ScreenLoop.stop();
+    }
 
     @SubscribeEvent
     public static void onClientTick(TickEvent.ClientTickEvent e) {

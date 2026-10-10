@@ -3,7 +3,9 @@ package com.example.gulp;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.registries.DeferredRegister;
@@ -35,6 +37,7 @@ public class Gulp {
     public Gulp() {
         IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
         SOUNDS.register(modBus);
+        ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, GulpServerConfig.SPEC);
         modBus.addListener(this::commonSetup);
     }
 

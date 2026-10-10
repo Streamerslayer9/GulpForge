@@ -1,4 +1,4 @@
-# Gulp (prototype) - Forge 1.20.1
+# Vore Mod (mod id: gulp) - Forge 1.20.1
 
 Forge 1.20.1 (47.x) mod: swallow mobs, carry them in a stomach, digest them for loot.
 
@@ -55,3 +55,17 @@ To replace a sound, convert it to .ogg (mono for in-world sounds) and keep the s
 
 ## Art hooks
 - HUD is drawn with plain rectangles in GulpHud.java; perk icons are in PerksScreen.iconFor().
+
+## Multiplayer
+- Everyone (server and every player) needs the mod installed. It is Forge 1.20.1 and works on dedicated servers.
+- Each player has their own stomach, saved with the world. Other players see your belly and hear your sounds.
+- Settings (belly style, sounds, volumes, level-up messages) are per player and saved on that player's computer.
+- Pets are protected: you can't swallow another player's tamed animal or horse.
+- Dead and spectating players can't use the stomach; if you die, everything inside is let out.
+- Server admins can edit serverconfig/gulp-server.toml (in the world folder) to: turn hard mode / digesting off
+  (hardModeEnabled), scale struggle damage (struggleDamageMultiplier, 0 = never hurts), and scale XP (xpMultiplier).
+
+## Mod info
+Name: Vore Mod. Description: This Mod adds Vore to your world with progression, perks and capacity to carry mobs
+wherever you want. The icon (src/main/resources/logo.png, also pack.png) is a pixel-art drumstick, the hunger icon.
+Replace logo.png with your own 256x256 art any time.
