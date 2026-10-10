@@ -10,10 +10,13 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.animal.horse.AbstractHorse;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.items.ItemHandlerHelper;
 import net.minecraftforge.network.PacketDistributor;
 
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.UUID;
 
@@ -32,6 +35,24 @@ public final class StomachLogic {
     private static final float STRUGGLE_BASE_DAMAGE = 2.0f;
     private static final float STRUGGLE_PER_VOLUME = 0.75f;
     private static final float STRUGGLE_MAX_DAMAGE = 5.0f;
+
+    // While a mob is being digested these say whose it is, so ServerEvents can hand its loot to that player.
+    private static ServerPlayer digestingPlayer;
+    private static LivingEntity digestingMob;
+    private static int itemsGiven;
+
+    public static ServerPlayer digestingPlayer() { return digestingPlayer; }
+    public static LivingEntity digestingMob() { return digestingMob; }
+
+    /** Puts a digested mob's drops straight into the player's inventory (anything that doesn't fit lands at their feet). */
+    public static void giveDrops(Collection<ItemEntity> drops) {
+        if (digestingPlayer == null) return;
+        for (ItemEntity drop : drops) {
+            if (drop.getItem().isEmpty()) continue;
+            itemsGiven += drop.getItem().getCount();
+            ItemHandlerHelper.giveItemToPlayer(digestingPlayer, drop.getItem().copy());
+        }
+    }
 
     /** Extra Looting levels applied to the mob being digested right now (see ServerEvents.onLooting). */
     private static int pendingLooting = 0;
@@ -175,7 +196,11 @@ public final class StomachLogic {
         le.discard();
         s.contents.add(entry);
         // Quick Gulp perk: looking up makes swallowing faster.
-        s.cooldown = p.getXRot() < -30 ? Math.max(10, 40 - 3 * s.rank(Perk.QUICK)) : 40;
+        // Quick Gulp perk: every rank takes 0.075s off the cooldown anywhere, and 0.15s when looking up.
+        // 2s with no perk; with 10 ranks it is 1.25s anywhere and 0.5s when looking up.
+        int quick = s.rank(Perk.QUICK);
+        float reduction = (p.getXRot() < -30 ? 3f : 1.5f) * quick; // in ticks (20 per second)
+        s.cooldown = Math.max(10, 40 - Math.round(reduction));
         sound(p, GulpSound.SWALLOW);
         p.displayClientMessage(Component.literal("Gulp! Swallowed ").append(displayName), true);
     }
@@ -267,21 +292,38 @@ public final class StomachLogic {
         EntityType.create(entry.getCompound("Entity"), w).ifPresent(e -> {
             e.setUUID(UUID.randomUUID());
             e.moveTo(p.getX(), p.getY(), p.getZ(), 0f, 0f);
-            w.addFreshEntity(e);
-            // Credit the kill to the player so loot tables apply.
+            // The mob is never added to the world, so nobody sees it for even a moment. Its loot and XP are
+            // intercepted (see ServerEvents) and go straight into your inventory instead of onto the ground.
             if (e instanceof LivingEntity le) {
+                le.setSilent(true); // no death groan: the Digestion sound plays instead
+                digestingPlayer = p;
+                digestingMob = le;
                 pendingLooting = looting;
+                itemsGiven = 0;
                 try {
-                    // Scaled to the mob's health so even a giant modded mob dies from it.
+                    // Credit the kill to the player so loot tables apply. Scaled to the mob's health so even a
+                    // giant modded mob dies from it.
                     le.hurt(w.damageSources().playerAttack(p), Math.max(10000f, le.getMaxHealth() * 2f));
                     if (le.isAlive()) le.kill(); // something blocked the hit: make sure it can't walk away
                 } finally {
                     pendingLooting = 0;
+                    digestingPlayer = null;
+                    digestingMob = null;
                 }
-            } else {
-                e.discard();
+                if (le.isAlive()) {
+                    // Something refused to die. Let it out rather than lose it.
+                    le.setSilent(false);
+                    w.addFreshEntity(le);
+                }
             }
         });
+        if (itemsGiven > 0) {
+            p.level().playSound(null, p.blockPosition(), SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, 0.25f, 1.3f);
+            itemsGiven = 0;
+        }
+        // Hearty Meal perk: heal 0.5 HP per rank for every mob digested.
+        int hearty = s.rank(Perk.HEARTY);
+        if (hearty > 0) p.heal(0.5f * hearty);
         sound(p, manual ? GulpSound.DIGEST_BUTTON : GulpSound.DIGEST);
         // Gourmet perk: +5% XP per rank, digesting only.
         gainXp(p, s, Stomach.digestXp(entry.getFloat("MaxHealth")) * (1f + 0.05f * s.rank(Perk.GOURMET)));

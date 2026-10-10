@@ -32,17 +32,18 @@ public class Stomach {
     public transient int cooldown = 0;
 
     /**
-     * XP needed to go from `level` to the next. Up to level 20 it grows faster than linear (100, 280, 520, 800 ...
-     * 8940 at level 20); after that it grows by a steady 300 per level so level 99 stays reachable (about 32,000).
+     * XP needed to go from `level` to the next. Up to level 10 it grows faster than linear (100, 280, 520, 800 ...
+     * 3160 at level 10); after that it only creeps up by 40 per level (4080 at level 33, 6720 at level 99), because
+     * your stomach and the mobs you can eat keep getting bigger and worth more XP.
      */
     public static int xpForNext(int level) {
-        if (level <= 20) return (int) (Math.round(100 * Math.pow(level, 1.5) / 10.0) * 10);
-        return 8940 + 300 * (level - 20);
+        if (level <= 10) return (int) (Math.round(100 * Math.pow(level, 1.5) / 10.0) * 10);
+        return 3160 + 40 * (level - 10);
     }
 
     /** XP for digesting a mob. Tougher mobs are worth much more. */
     public static int digestXp(float maxHealth) {
-        return 15 + (int) (3 * maxHealth);
+        return 20 + (int) (4 * maxHealth);
     }
 
     public int rank(Perk perk) { return ranks[perk.ordinal()]; }

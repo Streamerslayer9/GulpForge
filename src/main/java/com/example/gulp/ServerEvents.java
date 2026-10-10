@@ -3,6 +3,8 @@ package com.example.gulp;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.event.entity.living.LivingDropsEvent;
+import net.minecraftforge.event.entity.living.LivingExperienceDropEvent;
 import net.minecraftforge.event.entity.living.LootingLevelEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -31,6 +33,23 @@ public final class ServerEvents {
     @SubscribeEvent
     public static void onDeath(LivingDeathEvent e) {
         if (e.getEntity() instanceof ServerPlayer p) StomachLogic.releaseAll(p);
+    }
+
+    // A mob being digested: its loot goes straight into the player's inventory instead of onto the ground...
+    @SubscribeEvent
+    public static void onDigestDrops(LivingDropsEvent e) {
+        if (StomachLogic.digestingPlayer() == null || e.getEntity() != StomachLogic.digestingMob()) return;
+        StomachLogic.giveDrops(e.getDrops());
+        e.setCanceled(true);
+    }
+
+    // ...and so does its XP, with no orbs popping out.
+    @SubscribeEvent
+    public static void onDigestXp(LivingExperienceDropEvent e) {
+        ServerPlayer player = StomachLogic.digestingPlayer();
+        if (player == null || e.getEntity() != StomachLogic.digestingMob()) return;
+        if (e.getDroppedExperience() > 0) player.giveExperiencePoints(e.getDroppedExperience());
+        e.setCanceled(true);
     }
 
     // Rich Digestion perk: extra Looting levels, but only for mobs being digested right now.
