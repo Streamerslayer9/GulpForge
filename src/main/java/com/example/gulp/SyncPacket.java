@@ -1,6 +1,7 @@
 package com.example.gulp;
 
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.network.NetworkEvent;
 
@@ -30,7 +31,7 @@ public class SyncPacket {
             CompoundTag ent = e.getCompound("Entity");
             int dt = Math.max(1, e.getInt("DigestTime"));
             m.entries.add(new ClientState.EntryInfo(
-                    e.getInt("Uid"), e.getString("Name"), ent.getString("id"),
+                    e.getInt("Uid"), StomachLogic.entryName(e), ent.getString("id"),
                     e.getFloat("Size"), ent.getFloat("Health"), e.getFloat("MaxHealth"),
                     Math.min(1f, e.getInt("Digest") / (float) dt)));
         }
@@ -50,7 +51,7 @@ public class SyncPacket {
         buf.writeInt(m.entries.size());
         for (ClientState.EntryInfo e : m.entries) {
             buf.writeInt(e.uid());
-            buf.writeUtf(e.name());
+            buf.writeUtf(Component.Serializer.toJson(e.name()));
             buf.writeUtf(e.typeId());
             buf.writeFloat(e.size());
             buf.writeFloat(e.hp());
@@ -76,7 +77,8 @@ public class SyncPacket {
         int n = buf.readInt();
         for (int i = 0; i < n; i++) {
             int uid = buf.readInt();
-            String name = buf.readUtf();
+            Component name = Component.Serializer.fromJson(buf.readUtf());
+            if (name == null) name = Component.empty();
             String type = buf.readUtf();
             float size = buf.readFloat();
             float hp = buf.readFloat();

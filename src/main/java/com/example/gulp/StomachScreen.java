@@ -5,9 +5,10 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.item.SpawnEggItem;
+import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.HashMap;
 import java.util.List;
@@ -24,6 +25,8 @@ public class StomachScreen extends Screen {
     private static final int H = HEADER + ROWS * ROW_H + FOOTER;
 
     private static final Map<String, ItemStack> ICONS = new HashMap<>();
+    /** Every spawn egg in the game keyed by the mob it spawns, built the first time one is needed. */
+    private static Map<EntityType<?>, SpawnEggItem> allEggs;
 
     private int page = 0;
     private String lastSig = "";
@@ -35,16 +38,51 @@ public class StomachScreen extends Screen {
     private int left() { return (width - W) / 2; }
     private int top() { return (height - H) / 2; }
 
-    /** Use the mob's spawn egg as its icon (falls back to a bone). */
+    private static SpawnEggItem eggFor(EntityType<?> type) {
+        SpawnEggItem egg = SpawnEggItem.byId(type);
+        if (egg != null) return egg;
+        if (allEggs == null) {
+            // Some mods register their eggs in unusual ways, so look through every item once.
+            allEggs = new HashMap<>();
+            for (Item item : ForgeRegistries.ITEMS) {
+                if (item instanceof SpawnEggItem e) {
+                    try {
+                        EntityType<?> t = e.getType(null);
+                        if (t != null) allEggs.putIfAbsent(t, e);
+                    } catch (Exception ignored) {
+                        // a misbehaving modded egg: skip it
+                    }
+                }
+            }
+        }
+        return allEggs.get(type);
+    }
+
+    /** The mob's spawn egg as its icon. If the mob has no spawn egg (many modded mobs), the icon is left empty. */
     private static ItemStack iconFor(String typeId) {
         return ICONS.computeIfAbsent(typeId, id -> {
             Optional<EntityType<?>> type = EntityType.byString(id);
             if (type.isPresent()) {
-                SpawnEggItem egg = SpawnEggItem.byId(type.get());
+                SpawnEggItem egg = eggFor(type.get());
                 if (egg != null) return new ItemStack(egg);
             }
-            return new ItemStack(Items.BONE);
+            return ItemStack.EMPTY;
         });
+    }
+
+    /** The mob's name in the player's own language. A mod with no translation gets a readable name from its id. */
+    private static String displayName(ClientState.EntryInfo e) {
+        String name = e.name().getString();
+        if (!name.isEmpty() && !name.startsWith("entity.")) return name;
+        String id = e.typeId();
+        String path = id.substring(id.indexOf(':') + 1);
+        StringBuilder sb = new StringBuilder();
+        for (String part : path.split("[_/]+")) {
+            if (part.isEmpty()) continue;
+            if (sb.length() > 0) sb.append(' ');
+            sb.append(Character.toUpperCase(part.charAt(0))).append(part.substring(1));
+        }
+        return sb.length() > 0 ? sb.toString() : name;
     }
 
     @Override
@@ -140,8 +178,9 @@ public class StomachScreen extends Screen {
             ClientState.EntryInfo e = list.get(start + i);
             int ry = y + HEADER + i * ROW_H;
             g.fill(x + 6, ry + 1, x + W - 6, ry + ROW_H - 1, 0x40FFFFFF);
-            g.renderItem(iconFor(e.typeId()), x + 10, ry + 7);
-            g.drawString(font, font.plainSubstrByWidth(e.name(), 80), x + 32, ry + 4, 0xFFFFFF, true);
+            ItemStack icon = iconFor(e.typeId());
+            if (!icon.isEmpty()) g.renderItem(icon, x + 10, ry + 7); // no spawn egg = no icon
+            g.drawString(font, font.plainSubstrByWidth(displayName(e), 80), x + 32, ry + 4, 0xFFFFFF, true);
 
             // Health bar
             float hpRatio = e.maxHp() > 0 ? Math.min(1f, e.hp() / e.maxHp()) : 0f;

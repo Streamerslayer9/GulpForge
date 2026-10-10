@@ -26,8 +26,9 @@ Install Minecraft Forge for 1.20.1, then put gulp-0.1.0.jar in the mods folder. 
 - Levels go to 99. XP per level: 100, 280, 520 ... 8940 at level 20, then +300 per level (about 32,000 at 98).
 - Soft mode: mobs are held safely. A completely full stomach earns one level's worth of XP every 4 minutes, so the
   fuller you are the faster you level.
-- Hard mode: mobs digest over time (13s for a cow, 22s for an iron golem, about 3 minutes for a size-500 monster) and
-  drop their normal loot. Digesting gives 15 + 3 x the mob's max health in XP. Now and then (about 8% per mob per second)
+- Hard mode: mobs digest over time (13s for a cow, 22s for an iron golem, about 3 minutes for a size-500 monster).
+  When the digestion bar is full they don't die instantly: for about 8 more seconds they take steady damage (their red
+  health bar drains on the stomach screen), then they die and drop their normal loot. (DISSOLVE_SECONDS in StomachLogic.java.) Digesting gives 15 + 3 x the mob's max health in XP. Now and then (about 8% per mob per second)
   a mob struggles and hurts you: 2 HP plus 0.75 per 1.0 of mob volume, capped at 5 HP. Hard mode only; armor and Iron
   Stomach reduce it, and it never takes you below 2 hearts.
 - Level ups give 1 perk point each (98 by level 99). Perks (N > Perks; click = 1 rank, Shift = 5, Ctrl = as many as you can):
@@ -35,6 +36,9 @@ Install Minecraft Forge for 1.20.1, then put gulp-0.1.0.jar in the mods folder. 
   every 5s), Better Loot (10, +1 Looting level per 2 ranks on digested mobs, up to V), Quick Gulp (10, looking up:
   swallow cooldown -0.15s per rank, down to 0.5s), Iron Stomach (15, -5% struggle damage per rank), Gourmet (20, +5%
   XP from digesting per rank). 100 ranks in total, so a max level player has nearly everything. Add more in Perk.java.
+- Names: each swallowed mob keeps its real name (including modded mobs and name-tagged mobs) and is shown in each
+  player's own language. A modded mob with no translation gets a readable name made from its id (modid:big_mob -> Big Mob).
+- Icons: the stomach screen shows each mob's spawn egg (vanilla and modded). A mob with no spawn egg gets no icon.
 - Aiming: mobs have a slightly bigger hitbox for swallowing, and aiming near a mob (about 12 degrees) still counts.
 - The Ender Dragon, the Wither and players can never be swallowed.
 - Stomach contents are saved with the world. Dying releases everything.

@@ -1,5 +1,7 @@
 package com.example.gulp;
 
+import net.minecraft.network.chat.Component;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -13,7 +15,7 @@ public final class ClientState {
     private ClientState() { }
 
     /** One swallowed mob as the server describes it. */
-    public record EntryInfo(int uid, String name, String typeId, float size, float hp, float maxHp, float digest) { }
+    public record EntryInfo(int uid, Component name, String typeId, float size, float hp, float maxHp, float digest) { }
 
     private static boolean hard;
     private static int level = 1, xp, xpNeeded = 100, points;

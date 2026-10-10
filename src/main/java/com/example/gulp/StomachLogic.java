@@ -21,6 +21,13 @@ import java.util.UUID;
 public final class StomachLogic {
     /** Hard mode only: each swallowed mob has this chance every second to struggle and hurt you. */
     private static final float STRUGGLE_CHANCE_PER_SECOND = 0.08f;
+
+    /**
+     * Once the digestion bar is full, the mob doesn't die at once: for about this long it takes steady damage
+     * (you can watch its health bar drain on the stomach screen), and it dies and drops its loot when it runs out.
+     * Damage per second = the mob's max health / this, so a mob at full health lasts this many seconds.
+     */
+    private static final float DISSOLVE_SECONDS = 8f;
     /** Struggle damage = base + per-volume x the mob's size, capped (2.0 = one heart), before armor and Iron Stomach. */
     private static final float STRUGGLE_BASE_DAMAGE = 2.0f;
     private static final float STRUGGLE_PER_VOLUME = 0.75f;
@@ -158,7 +165,11 @@ public final class StomachLogic {
         entry.putInt("Digest", 0);
         // Bigger = slower, but gently: 13s for a cow, 22s for an iron golem, about 3 minutes for a size-500 monster.
         entry.putInt("DigestTime", 100 + (int) (150 * Math.sqrt(size)));
-        entry.putString("Name", le.getName().getString());
+        // Keep the name as a translatable component, so every player sees it in their own language, and
+        // modded mobs and name-tagged mobs show properly. "Name" is a plain-text backup for older saves.
+        Component displayName = le.getName();
+        entry.putString("Name", displayName.getString());
+        entry.putString("NameJson", Component.Serializer.toJson(displayName));
         entry.putInt("Uid", p.getRandom().nextInt());
 
         le.discard();
@@ -166,7 +177,7 @@ public final class StomachLogic {
         // Quick Gulp perk: looking up makes swallowing faster.
         s.cooldown = p.getXRot() < -30 ? Math.max(10, 40 - 3 * s.rank(Perk.QUICK)) : 40;
         sound(p, GulpSound.SWALLOW);
-        p.displayClientMessage(Component.literal("Gulp! Swallowed " + entry.getString("Name")), true);
+        p.displayClientMessage(Component.literal("Gulp! Swallowed ").append(displayName), true);
     }
 
     // ------------------------------------------------------------ per-tick
@@ -176,19 +187,39 @@ public final class StomachLogic {
         if (s.contents.isEmpty()) return;
 
         boolean changed = false;
+        boolean dissolving = false;
         boolean hardNow = s.hard && hardModeAllowed();
         int healAmount = s.rank(Perk.HEALING);
         Iterator<CompoundTag> it = s.contents.iterator();
         while (it.hasNext()) {
             CompoundTag e = it.next();
             if (hardNow) {
-                int d = e.getInt("Digest") + 1;
-                e.putInt("Digest", d);
-                if (d >= e.getInt("DigestTime")) {
-                    it.remove();
-                    digest(p, s, e, false);
-                    changed = true;
-                } else if (p.tickCount % 20 == 0 && p.getHealth() > 4f
+                // Phase 1: the digestion bar fills up.
+                int d = e.getInt("Digest");
+                int digestTime = e.getInt("DigestTime");
+                if (d < digestTime) {
+                    d++;
+                    e.putInt("Digest", d);
+                }
+                // Phase 2 (grace period): the bar is full, so the mob now takes damage until it runs out of health.
+                if (d >= digestTime) {
+                    CompoundTag ent = e.getCompound("Entity");
+                    float maxHealth = Math.max(1f, e.getFloat("MaxHealth"));
+                    if (!e.getBoolean("Dissolving")) {
+                        e.putBoolean("Dissolving", true);
+                        if (ent.getFloat("Health") <= 0f) ent.putFloat("Health", maxHealth); // no health recorded: start full
+                    }
+                    float health = ent.getFloat("Health") - maxHealth / (DISSOLVE_SECONDS * 20f);
+                    if (health <= 0f) {
+                        it.remove();
+                        digest(p, s, e, false); // now it dies and drops its loot
+                        changed = true;
+                        continue;
+                    }
+                    ent.putFloat("Health", health);
+                    dissolving = true;
+                }
+                if (p.tickCount % 20 == 0 && p.getHealth() > 4f
                         && p.getRandom().nextFloat() < STRUGGLE_CHANCE_PER_SECOND) {
                     // Hard mode only, and only now and then: the mob fights back.
                     // Bigger mobs hit harder. Armor reduces it, Iron Stomach reduces it by 5% per rank,
@@ -200,7 +231,7 @@ public final class StomachLogic {
                     damage = Math.min(damage, p.getHealth() - 4f);
                     if (damage > 0f) {
                         p.hurt(p.level().damageSources().generic(), damage);
-                        p.displayClientMessage(Component.literal(e.getString("Name") + " struggles inside you!"), true);
+                        p.displayClientMessage(Component.empty().append(entryName(e)).append(" struggles inside you!"), true);
                     }
                 }
             } else {
@@ -223,7 +254,7 @@ public final class StomachLogic {
 
         if (p.tickCount % 20 == 0) mgr.setDirty();
         // Big stomachs send a lot of data, so they sync a bit less often.
-        int syncEvery = s.contents.size() > 20 ? 20 : 10;
+        int syncEvery = s.contents.size() > 20 ? 20 : (dissolving ? 5 : 10);
         if (changed || p.tickCount % syncEvery == 0) sync(p, s);
     }
 
@@ -298,6 +329,15 @@ public final class StomachLogic {
     private static void sound(ServerPlayer p, GulpSound type) {
         Net.CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> p),
                 new SoundPacket(type.ordinal(), p.getX(), p.getY(), p.getZ()));
+    }
+
+    /** The name of a swallowed mob as a Component (falls back to the plain text name for older saves). */
+    public static Component entryName(CompoundTag entry) {
+        if (entry.contains("NameJson")) {
+            Component parsed = Component.Serializer.fromJson(entry.getString("NameJson"));
+            if (parsed != null) return parsed;
+        }
+        return Component.literal(entry.getString("Name"));
     }
 
     private static boolean hardModeAllowed() {
