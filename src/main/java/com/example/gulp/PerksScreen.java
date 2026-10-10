@@ -13,9 +13,9 @@ import java.util.List;
 /** Spend perk points (1 per level-up). Icons are plain in-game items. */
 public class PerksScreen extends Screen {
     private static final int W = 250;
-    private static final int ROW_H = 38;
-    private static final int HEADER = 28;
-    private static final int FOOTER = 32;
+    private static final int ROW_H = 34;
+    private static final int HEADER = 26;
+    private static final int FOOTER = 30;
     private static final int H = HEADER + Perk.values().length * ROW_H + FOOTER;
 
     private String lastSig = "";
@@ -35,6 +35,7 @@ public class PerksScreen extends Screen {
             case RICH -> new ItemStack(Items.EMERALD);
             case QUICK -> new ItemStack(Items.ENDER_EYE);
             case IRON -> new ItemStack(Items.IRON_CHESTPLATE);
+            case GOURMET -> new ItemStack(Items.COOKED_BEEF);
         };
     }
 
@@ -49,8 +50,12 @@ public class PerksScreen extends Screen {
             Perk perk = perks[i];
             int idx = i;
             int ry = y + HEADER + i * ROW_H;
-            Button buy = Button.builder(Component.literal("+"), btn -> Net.send(6, idx))
-                    .bounds(x + W - 34, ry + 9, 26, 20).build();
+            // Click = 1 rank, Shift+click = 5 ranks, Ctrl+click = as many as you can afford.
+            Button buy = Button.builder(Component.literal("+"), btn -> {
+                        int count = hasControlDown() ? 100 : hasShiftDown() ? 5 : 1;
+                        Net.send(6, idx | (count << 8));
+                    })
+                    .bounds(x + W - 34, ry + 7, 26, 20).build();
             buy.active = ClientState.points() > 0 && ClientState.rank(perk) < perk.maxRank;
             addRenderableWidget(buy);
         }
@@ -95,18 +100,21 @@ public class PerksScreen extends Screen {
             Perk perk = perks[i];
             int ry = y + HEADER + i * ROW_H;
             g.fill(x + 6, ry + 1, x + W - 6, ry + ROW_H - 2, 0x40FFFFFF);
-            g.renderItem(iconFor(perk), x + 12, ry + 11);
+            g.renderItem(iconFor(perk), x + 12, ry + 9);
 
-            g.drawString(font, perk.title, x + 36, ry + 4, 0xFFFFFF, true);
+            g.drawString(font, perk.title, x + 36, ry + 3, 0xFFFFFF, true);
             String rank = ClientState.rank(perk) + "/" + perk.maxRank;
-            g.drawString(font, rank, x + W - 44 - font.width(rank), ry + 4,
+            g.drawString(font, rank, x + W - 44 - font.width(rank), ry + 3,
                     ClientState.rank(perk) >= perk.maxRank ? 0x55FF55 : 0xBBBBBB, true);
 
             List<FormattedCharSequence> lines = font.split(Component.literal(perk.description), W - 80);
             for (int l = 0; l < Math.min(2, lines.size()); l++) {
-                g.drawString(font, lines.get(l), x + 36, ry + 15 + l * 10, 0x999999, false);
+                g.drawString(font, lines.get(l), x + 36, ry + 13 + l * 9, 0x999999, false);
             }
         }
+
+        String hint = "Shift: +5   Ctrl: max";
+        g.drawString(font, hint, x + (W - font.width(hint)) / 2, y + H - 22, 0x777777, false);
 
         super.render(g, mouseX, mouseY, partialTick);
     }

@@ -18,17 +18,25 @@ Install Minecraft Forge for 1.20.1, then put gulp-0.1.0.jar in the mods folder. 
 - N = open the stomach screen (see contents, release or digest each mob, spend perk points, settings)
 
 ## Mechanics
-- Capacity is based on mob volume (width * width * height). Chicken ~0.1, villager ~0.7, cow ~1.1, horse ~3, iron golem ~5.
-- Soft mode: mobs are held safely, and you earn slow XP for holding them.
-- Hard mode: mobs digest over time and drop their normal loot; you earn more XP. Now and then (about 8% per mob per second) a mob struggles and hurts you: 2 HP plus 0.75 per 1.0 of mob volume, capped at 5 HP, so bigger mobs hit harder. Hard mode only; armor and Iron Stomach reduce it, and it never kills you.
-- Levels go to 20 (19 perk points for 25 perk ranks, so players have to choose). XP needed per level grows faster than linear (100, 280, 520, 800, 1120 ...).
-  Hard mode: digesting gives 15 + 3 x the mob's max health in XP. Soft mode: 0.5 XP per second per 1.0 of volume held.
-- Level ups raise capacity and give 1 perk point each. Perks (spend points with N > Perks):
-  Every perk has 5 ranks. Roomy Stomach (+1 capacity/rank), Healing Stomach (soft mode: held mobs heal 1 HP per rank
-  every 5s), Better Loot (+1 Looting level per rank on digested mobs, up to Looting V), Quick Gulp (looking up:
-  swallow cooldown -0.3s per rank, down to 0.5s), Iron Stomach (-15% struggle damage per rank, down to 25%).
-  Add more in Perk.java (append to the end).
+- Capacity is a volume number. A mob's size is its hitbox width x width x height (chicken ~0.1, villager ~0.7, cow ~1.1,
+  horse ~3, iron golem ~5, modded mobs anywhere from 1 to hundreds). A mob fits if it is no bigger than your capacity and
+  everything inside adds up to no more than your capacity. You can hold up to 100 creatures at once.
+- Capacity = (1 + 0.75 x level + 0.08 x level^2) x (1 + 0.06 x Roomy Stomach rank). Every level gives more room than the
+  last: 1.8 at level 1, 16.5 at 10, 48 at 20, 239 at 50, 859 at 99, and up to 2406 with Roomy Stomach 30/30.
+- Levels go to 99. XP per level: 100, 280, 520 ... 8940 at level 20, then +300 per level (about 32,000 at 98).
+- Soft mode: mobs are held safely. A completely full stomach earns one level's worth of XP every 4 minutes, so the
+  fuller you are the faster you level.
+- Hard mode: mobs digest over time (13s for a cow, 22s for an iron golem, about 3 minutes for a size-500 monster) and
+  drop their normal loot. Digesting gives 15 + 3 x the mob's max health in XP. Now and then (about 8% per mob per second)
+  a mob struggles and hurts you: 2 HP plus 0.75 per 1.0 of mob volume, capped at 5 HP. Hard mode only; armor and Iron
+  Stomach reduce it, and it never takes you below 2 hearts.
+- Level ups give 1 perk point each (98 by level 99). Perks (N > Perks; click = 1 rank, Shift = 5, Ctrl = as many as you can):
+  Roomy Stomach (30 ranks, +6% capacity each), Healing Stomach (15, soft mode: held mobs heal 1% of max HP per rank
+  every 5s), Better Loot (10, +1 Looting level per 2 ranks on digested mobs, up to V), Quick Gulp (10, looking up:
+  swallow cooldown -0.15s per rank, down to 0.5s), Iron Stomach (15, -5% struggle damage per rank), Gourmet (20, +5%
+  XP from digesting per rank). 100 ranks in total, so a max level player has nearly everything. Add more in Perk.java.
 - Aiming: mobs have a slightly bigger hitbox for swallowing, and aiming near a mob (about 12 degrees) still counts.
+- The Ender Dragon, the Wither and players can never be swallowed.
 - Stomach contents are saved with the world. Dying releases everything.
 
 ## Visible belly

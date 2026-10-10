@@ -10,10 +10,18 @@ import java.util.List;
 /** One player's stomach. Each entry in `contents` is an NBT compound:
  *  Entity (full saved mob), Size, MaxHealth, Digest, DigestTime, Name, Uid */
 public class Stomach {
-    public static final int MAX_LEVEL = 20;
+    public static final int MAX_LEVEL = 99;
 
-    /** Soft mode: XP per second for every 1.0 of mob volume you're holding. */
-    public static final float SOFT_XP_PER_VOLUME_SECOND = 0.5f;
+    /** The most creatures one stomach can hold at once, so a huge stomach full of chickens can't lag a server. */
+    public static final int MAX_MOBS = 100;
+
+    /** Soft mode: a completely full stomach earns one level's worth of XP in this many seconds. */
+    public static final float SOFT_SECONDS_PER_LEVEL = 240f;
+
+    /** Formats a stomach volume so big numbers stay short (1.8, 16.5, 859). */
+    public static String fmtVolume(double v) {
+        return v >= 100 ? String.format("%.0f", v) : String.format("%.1f", v);
+    }
 
     public boolean hard = false;
     public int level = 1;
@@ -23,9 +31,13 @@ public class Stomach {
     public final List<CompoundTag> contents = new ArrayList<>();
     public transient int cooldown = 0;
 
-    /** XP needed to go from `level` to the next. Grows faster than linear: 100, 280, 520, 800, 1120, 1470 ... */
+    /**
+     * XP needed to go from `level` to the next. Up to level 20 it grows faster than linear (100, 280, 520, 800 ...
+     * 8940 at level 20); after that it grows by a steady 300 per level so level 99 stays reachable (about 32,000).
+     */
     public static int xpForNext(int level) {
-        return (int) (Math.round(100 * Math.pow(level, 1.5) / 10.0) * 10);
+        if (level <= 20) return (int) (Math.round(100 * Math.pow(level, 1.5) / 10.0) * 10);
+        return 8940 + 300 * (level - 20);
     }
 
     /** XP for digesting a mob. Tougher mobs are worth much more. */
@@ -35,8 +47,15 @@ public class Stomach {
 
     public int rank(Perk perk) { return ranks[perk.ordinal()]; }
 
-    /** How much "mob volume" fits. Chicken ~0.1, villager ~0.7, cow ~1.1, horse ~3, iron golem ~5. */
-    public double capacity() { return 1.0 + level * 0.75 + rank(Perk.ROOMY) * 1.0; }
+    /**
+     * How much "mob volume" fits. The base grows faster with every level (1.8 at level 1, 16 at level 10, 48 at
+     * level 20, 239 at level 50, 859 at level 99), then Roomy Stomach multiplies it by up to 2.8.
+     * For comparison: chicken ~0.1, villager ~0.7, cow ~1.1, horse ~3, iron golem ~5, big modded mobs 50-500+.
+     */
+    public double capacity() {
+        double base = 1.0 + 0.75 * level + 0.08 * level * level;
+        return base * (1.0 + 0.06 * rank(Perk.ROOMY));
+    }
 
     public double used() {
         double total = 0;

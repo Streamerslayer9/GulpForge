@@ -83,11 +83,16 @@ public final class StomachLogic {
                 }
             }
             case 6 -> {
-                Perk perk = Perk.byIndex(arg);
-                if (perk != null && s.points > 0 && s.rank(perk) < perk.maxRank) {
-                    s.ranks[perk.ordinal()]++;
-                    s.points--;
-                    p.level().playSound(null, p.blockPosition(), SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.8f, 1.2f);
+                // arg = perk index in the low 8 bits, how many ranks to buy above that (0 or 1 means one)
+                Perk perk = Perk.byIndex(arg & 0xFF);
+                int count = Math.max(1, Math.min(100, arg >> 8));
+                if (perk != null) {
+                    int bought = Math.min(count, Math.min(s.points, perk.maxRank - s.rank(perk)));
+                    if (bought > 0) {
+                        s.ranks[perk.ordinal()] += bought;
+                        s.points -= bought;
+                        p.level().playSound(null, p.blockPosition(), SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.8f, 1.2f);
+                    }
                 }
             }
             default -> { }
@@ -131,11 +136,15 @@ public final class StomachLogic {
         }
         float size = Math.max(0.05f, le.getBbWidth() * le.getBbWidth() * le.getBbHeight());
         if (size > s.capacity()) {
-            p.displayClientMessage(Component.literal("Too big for your stomach! (needs " + fmt(size) + ", capacity " + fmt(s.capacity()) + ")"), true);
+            p.displayClientMessage(Component.literal("Too big for your stomach! (needs " + Stomach.fmtVolume(size) + ", capacity " + Stomach.fmtVolume(s.capacity()) + ")"), true);
             return;
         }
         if (s.used() + size > s.capacity()) {
             p.displayClientMessage(Component.literal("Your stomach is too full."), true);
+            return;
+        }
+        if (s.contents.size() >= Stomach.MAX_MOBS) {
+            p.displayClientMessage(Component.literal("You can't hold more than " + Stomach.MAX_MOBS + " creatures at once."), true);
             return;
         }
         le.stopRiding();
@@ -147,14 +156,15 @@ public final class StomachLogic {
         entry.putFloat("Size", size);
         entry.putFloat("MaxHealth", le.getMaxHealth());
         entry.putInt("Digest", 0);
-        entry.putInt("DigestTime", 100 + (int) (size * 100)); // bigger = slower
+        // Bigger = slower, but gently: 13s for a cow, 22s for an iron golem, about 3 minutes for a size-500 monster.
+        entry.putInt("DigestTime", 100 + (int) (150 * Math.sqrt(size)));
         entry.putString("Name", le.getName().getString());
         entry.putInt("Uid", p.getRandom().nextInt());
 
         le.discard();
         s.contents.add(entry);
         // Quick Gulp perk: looking up makes swallowing faster.
-        s.cooldown = p.getXRot() < -30 ? Math.max(10, 40 - 6 * s.rank(Perk.QUICK)) : 40;
+        s.cooldown = p.getXRot() < -30 ? Math.max(10, 40 - 3 * s.rank(Perk.QUICK)) : 40;
         sound(p, GulpSound.SWALLOW);
         p.displayClientMessage(Component.literal("Gulp! Swallowed " + entry.getString("Name")), true);
     }
@@ -181,11 +191,11 @@ public final class StomachLogic {
                 } else if (p.tickCount % 20 == 0 && p.getHealth() > 4f
                         && p.getRandom().nextFloat() < STRUGGLE_CHANCE_PER_SECOND) {
                     // Hard mode only, and only now and then: the mob fights back.
-                    // Bigger mobs hit harder. Armor reduces it, Iron Stomach reduces it by 15% per rank,
+                    // Bigger mobs hit harder. Armor reduces it, Iron Stomach reduces it by 5% per rank,
                     // and it can never take you below 2 hearts.
                     float strength = Math.min(STRUGGLE_MAX_DAMAGE,
                             STRUGGLE_BASE_DAMAGE + STRUGGLE_PER_VOLUME * e.getFloat("Size"));
-                    float damage = strength * Math.max(0f, 1f - 0.15f * s.rank(Perk.IRON))
+                    float damage = strength * Math.max(0f, 1f - 0.05f * s.rank(Perk.IRON))
                             * GulpServerConfig.STRUGGLE_DAMAGE_MULTIPLIER.get().floatValue();
                     damage = Math.min(damage, p.getHealth() - 4f);
                     if (damage > 0f) {
@@ -194,26 +204,35 @@ public final class StomachLogic {
                     }
                 }
             } else {
-                // Soft mode still earns XP (holding things is progress too).
-                if (p.tickCount % 20 == 0) {
-                    gainXp(p, s, e.getFloat("Size") * Stomach.SOFT_XP_PER_VOLUME_SECOND);
-                }
                 // Healing Stomach perk
                 if (healAmount > 0 && p.tickCount % 100 == 0) {
                     CompoundTag ent = e.getCompound("Entity");
-                    ent.putFloat("Health", Math.min(e.getFloat("MaxHealth"), ent.getFloat("Health") + healAmount));
+                    float maxHealth = e.getFloat("MaxHealth");
+                    float heal = Math.max(1f, maxHealth * 0.01f * healAmount); // 1% of its max HP per rank, at least 1
+                    ent.putFloat("Health", Math.min(maxHealth, ent.getFloat("Health") + heal));
                 }
             }
         }
 
+        // Soft mode still earns XP: a completely full stomach earns a level's worth every few minutes,
+        // so the fuller you are, the faster you level (and a bigger stomach means more to carry).
+        if (!hardNow && p.tickCount % 20 == 0) {
+            float fill = (float) Math.min(1.0, s.used() / s.capacity());
+            gainXp(p, s, fill * Stomach.xpForNext(s.level) / Stomach.SOFT_SECONDS_PER_LEVEL);
+        }
+
         if (p.tickCount % 20 == 0) mgr.setDirty();
-        if (changed || p.tickCount % 10 == 0) sync(p, s);
+        // Big stomachs send a lot of data, so they sync a bit less often.
+        int syncEvery = s.contents.size() > 20 ? 20 : 10;
+        if (changed || p.tickCount % syncEvery == 0) sync(p, s);
     }
 
     /** @param manual true when the player used the Digest button on the stomach screen */
     private static void digest(ServerPlayer p, Stomach s, CompoundTag entry, boolean manual) {
         ServerLevel w = p.serverLevel();
-        int looting = s.rank(Perk.RICH); // Rich Digestion perk = extra Looting levels
+        // Better Loot perk: 1 Looting level per 2 ranks (an odd rank is a coin flip for the extra level), up to Looting V.
+        int lootRank = s.rank(Perk.RICH);
+        int looting = lootRank / 2 + ((lootRank % 2 == 1 && p.getRandom().nextFloat() < 0.5f) ? 1 : 0);
         EntityType.create(entry.getCompound("Entity"), w).ifPresent(e -> {
             e.setUUID(UUID.randomUUID());
             e.moveTo(p.getX(), p.getY(), p.getZ(), 0f, 0f);
@@ -222,7 +241,9 @@ public final class StomachLogic {
             if (e instanceof LivingEntity le) {
                 pendingLooting = looting;
                 try {
-                    le.hurt(w.damageSources().playerAttack(p), 10000f);
+                    // Scaled to the mob's health so even a giant modded mob dies from it.
+                    le.hurt(w.damageSources().playerAttack(p), Math.max(10000f, le.getMaxHealth() * 2f));
+                    if (le.isAlive()) le.kill(); // something blocked the hit: make sure it can't walk away
                 } finally {
                     pendingLooting = 0;
                 }
@@ -231,7 +252,8 @@ public final class StomachLogic {
             }
         });
         sound(p, manual ? GulpSound.DIGEST_BUTTON : GulpSound.DIGEST);
-        gainXp(p, s, Stomach.digestXp(entry.getFloat("MaxHealth")));
+        // Gourmet perk: +5% XP per rank, digesting only.
+        gainXp(p, s, Stomach.digestXp(entry.getFloat("MaxHealth")) * (1f + 0.05f * s.rank(Perk.GOURMET)));
     }
 
     /** @return false if the mob couldn't be recreated (so the caller keeps it instead of losing it) */

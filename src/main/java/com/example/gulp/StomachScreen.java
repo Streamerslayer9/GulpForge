@@ -128,7 +128,7 @@ public class StomachScreen extends Screen {
         g.fill(bx, by, bx + bw, by + 10, 0xFF333333);
         int fill = (int) (bw * Math.min(1f, ClientState.used() / ClientState.cap()));
         g.fill(bx, by, bx + fill, by + 10, ClientState.isHard() ? 0xFFC0502E : 0xFF5DB85D);
-        g.drawString(font, String.format("%.1f / %.1f", ClientState.used(), ClientState.cap()), bx + 4, by + 1, 0xFFFFFF, true);
+        g.drawString(font, Stomach.fmtVolume(ClientState.used()) + " / " + Stomach.fmtVolume(ClientState.cap()), bx + 4, by + 1, 0xFFFFFF, true);
 
         // Rows
         List<ClientState.EntryInfo> list = ClientState.entries();
