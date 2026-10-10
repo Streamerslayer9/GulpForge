@@ -33,15 +33,16 @@ Install Minecraft Forge for 1.20.1, then put gulp-0.1.0.jar in the mods folder. 
   digesting player's inventory (overflow lands at their feet). (DISSOLVE_SECONDS in StomachLogic.java.) Digesting gives 20 + 4 x the mob's max health in XP. Now and then (about 8% per mob per second)
   a mob struggles and hurts you: 2 HP plus 0.75 per 1.0 of mob volume, capped at 5 HP. Hard mode only; armor and Iron
   Stomach reduce it, and it never takes you below 2 hearts.
-- Level ups give 1 perk point each (98 by level 99). Perks (N > Perks; click = 1 rank, Shift = 5, Ctrl = as many as you can):
+- Perk points: the game hands out exactly enough points by level 99 to buy every rank of every perk (110 points for the
+  current 110 ranks), with none left over and none missing. Most levels give 1 point and about every eighth level
+  gives 2 (see Stomach.cumulativePoints). If you add or change perks, the points adjust themselves. Older saves are
+  topped up automatically to what their level should have earned.
+  Spend them in N > Perks (click = 1 rank, Shift = 5, Ctrl = as many as you can):
   Roomy Stomach (30 ranks, +6% capacity each), Healing Stomach (15, soft mode: held mobs heal 1% of max HP per rank
   every 5s), Better Loot (10, +1 Looting level per 2 ranks on digested mobs, up to V), Quick Gulp (10, swallow
   cooldown -0.075s per rank anywhere and -0.15s per rank when looking up: 2s with no perk, 1.25s / 0.5s at 10 ranks),
   Iron Stomach (15, -5% struggle damage per rank), Gourmet (20, +5% XP from digesting per rank), Hearty Meal (10, heal
-  0.5 HP per rank for every mob you digest). 110 ranks for 98 points, so nobody gets everything. Add more in Perk.java.
-- Names: each swallowed mob keeps its real name (including modded mobs and name-tagged mobs) and is shown in each
-  player's own language. A modded mob with no translation gets a readable name made from its id (modid:big_mob -> Big Mob).
-- Icons: the stomach screen shows each mob's spawn egg (vanilla and modded). A mob with no spawn egg gets no icon.
+  0.5 HP per rank for every mob you digest). Add more in Perk.java (append to the end).
 - Aiming: mobs have a slightly bigger hitbox for swallowing, and aiming near a mob (about 12 degrees) still counts.
 - The Ender Dragon, the Wither and players can never be swallowed.
 - Stomach contents are saved with the world. Dying releases everything.

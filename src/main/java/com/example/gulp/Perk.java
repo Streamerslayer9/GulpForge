@@ -2,8 +2,9 @@ package com.example.gulp;
 
 /**
  * The perks. Add a new one at the END of this list, give it an effect in StomachLogic and an icon in PerksScreen.
- * There are 98 perk points by level 99 (one per level-up) and 110 ranks in total, so a max-level player
- * can't have everything and has to choose.
+ * The game hands out exactly totalRanks() perk points by level 99 (see Stomach.cumulativePoints), so a max-level
+ * player can buy every rank of every perk, with nothing left over and nothing missing. Add or change a perk's
+ * ranks and the points adjust themselves.
  */
 public enum Perk {
     ROOMY("Roomy Stomach", "+6% stomach capacity per rank.", 30),
@@ -22,6 +23,13 @@ public enum Perk {
         this.title = title;
         this.description = description;
         this.maxRank = maxRank;
+    }
+
+    /** Every rank of every perk added together. */
+    public static int totalRanks() {
+        int total = 0;
+        for (Perk p : values()) total += p.maxRank;
+        return total;
     }
 
     public static Perk byIndex(int i) {

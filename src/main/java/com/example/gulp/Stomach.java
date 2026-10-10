@@ -64,7 +64,15 @@ public class Stomach {
         return total;
     }
 
-    /** @return how many levels were gained (each level gives 1 perk point) */
+    /**
+     * Total perk points earned by reaching `level`: 0 at level 1, exactly Perk.totalRanks() at level 99, spread evenly
+     * (most levels give 1 point, and about every eighth level gives 2).
+     */
+    public static int cumulativePoints(int level) {
+        return (int) ((long) (Math.max(1, level) - 1) * Perk.totalRanks() / (MAX_LEVEL - 1));
+    }
+
+    /** @return how many levels were gained */
     public int addXp(int amount) {
         if (level >= MAX_LEVEL) return 0;
         xp += amount;
@@ -72,7 +80,7 @@ public class Stomach {
         while (level < MAX_LEVEL && xp >= xpForNext(level)) {
             xp -= xpForNext(level);
             level++;
-            points++;
+            points += cumulativePoints(level) - cumulativePoints(level - 1);
             gained++;
         }
         return gained;
@@ -101,6 +109,11 @@ public class Stomach {
         s.points = nbt.contains("Points") ? nbt.getInt("Points") : s.level - 1;
         CompoundTag perks = nbt.getCompound("Perks");
         for (Perk p : Perk.values()) s.ranks[p.ordinal()] = Math.min(p.maxRank, perks.getInt(p.name()));
+        // Older saves earned fewer points. Top them up so everyone has what a player at their level should have.
+        int spent = 0;
+        for (int r : s.ranks) spent += r;
+        int shouldHave = cumulativePoints(s.level);
+        if (s.points + spent < shouldHave) s.points = shouldHave - spent;
         ListTag list = nbt.getList("Contents", Tag.TAG_COMPOUND);
         for (int i = 0; i < list.size(); i++) s.contents.add(list.getCompound(i));
         return s;
