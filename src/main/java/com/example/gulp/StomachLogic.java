@@ -84,12 +84,12 @@ public final class StomachLogic {
             case 0 -> swallow(p, s, arg);
             case 1 -> {
                 if (!s.hard && !hardModeAllowed()) {
-                    p.displayClientMessage(Component.literal("Hard mode is turned off on this server."), true);
+                    StomachLogic.say(p, Component.literal("Hard mode is turned off on this server."));
                 } else {
                     s.hard = !s.hard;
-                    p.displayClientMessage(Component.literal(s.hard
+                    StomachLogic.say(p, Component.literal(s.hard
                             ? "Hard mode: contents will be digested for loot."
-                            : "Soft mode: contents are held safely."), true);
+                            : "Soft mode: contents are held safely."));
                 }
             }
             case 2 -> {
@@ -120,20 +120,20 @@ public final class StomachLogic {
                 int i = indexOf(s, arg);
                 if (i >= 0) {
                     if (PlayerHolding.isPlayerEntry(s.contents.get(i))) {
-                        p.displayClientMessage(Component.literal("Players are only held, never digested."), true);
+                        StomachLogic.say(p, Component.literal("Players are only held, never digested."));
                     } else if (hardModeAllowed()) {
                         digest(p, s, s.contents.remove(i), true);
                     } else {
-                        p.displayClientMessage(Component.literal("Digesting is turned off on this server."), true);
+                        StomachLogic.say(p, Component.literal("Digesting is turned off on this server."));
                     }
                 }
             }
             case 7 -> openStorage(p, mgr, s);
             case 8 -> {
                 s.allowSwallowed = !s.allowSwallowed;
-                p.displayClientMessage(Component.literal(s.allowSwallowed
+                StomachLogic.say(p, Component.literal(s.allowSwallowed
                         ? "Other players can now swallow you (you can always get out with the Release key)."
-                        : "Other players can no longer swallow you."), true);
+                        : "Other players can no longer swallow you."));
             }
             case 6 -> {
                 // arg = perk index in the low 8 bits, how many ranks to buy above that (0 or 1 means one)
@@ -183,31 +183,31 @@ public final class StomachLogic {
             return;
         }
         if (!(target instanceof LivingEntity le)) {
-            p.displayClientMessage(Component.literal("Nothing swallowable in reach."), true);
+            StomachLogic.say(p, Component.literal("Nothing swallowable in reach."));
             return;
         }
         // Multiplayer: don't let anyone swallow (or digest) another player's tamed pet or horse.
         if (le instanceof TamableAnimal pet && pet.isTame() && pet.getOwnerUUID() != null
                 && !pet.getOwnerUUID().equals(p.getUUID())) {
-            p.displayClientMessage(Component.literal("That pet belongs to someone else."), true);
+            StomachLogic.say(p, Component.literal("That pet belongs to someone else."));
             return;
         }
         if (le instanceof AbstractHorse horse && horse.isTamed() && horse.getOwnerUUID() != null
                 && !horse.getOwnerUUID().equals(p.getUUID())) {
-            p.displayClientMessage(Component.literal("That animal belongs to someone else."), true);
+            StomachLogic.say(p, Component.literal("That animal belongs to someone else."));
             return;
         }
         float size = Math.max(0.05f, le.getBbWidth() * le.getBbWidth() * le.getBbHeight());
         if (size > s.capacity()) {
-            p.displayClientMessage(Component.literal("Too big for your stomach! (needs " + Stomach.fmtVolume(size) + ", capacity " + Stomach.fmtVolume(s.capacity()) + ")"), true);
+            StomachLogic.say(p, Component.literal("Too big for your stomach! (needs " + Stomach.fmtVolume(size) + ", capacity " + Stomach.fmtVolume(s.capacity()) + ")"));
             return;
         }
         if (s.used() + size > s.capacity()) {
-            p.displayClientMessage(Component.literal("Your stomach is too full."), true);
+            StomachLogic.say(p, Component.literal("Your stomach is too full."));
             return;
         }
         if (s.contents.size() >= Stomach.MAX_MOBS) {
-            p.displayClientMessage(Component.literal("You can't hold more than " + Stomach.MAX_MOBS + " creatures at once."), true);
+            StomachLogic.say(p, Component.literal("You can't hold more than " + Stomach.MAX_MOBS + " creatures at once."));
             return;
         }
         le.stopRiding();
@@ -241,7 +241,7 @@ public final class StomachLogic {
         float reduction = (p.getXRot() < -30 ? 3f : 1.5f) * quick; // in ticks (20 per second)
         s.cooldown = Math.max(10, 40 - Math.round(reduction));
         sound(p, GulpSound.SWALLOW);
-        p.displayClientMessage(Component.literal("Gulp! Swallowed ").append(what), true);
+        StomachLogic.say(p, Component.literal("Gulp! Swallowed ").append(what));
     }
 
     // ------------------------------------------------------------ item storage
@@ -249,7 +249,7 @@ public final class StomachLogic {
     /** Swallows a dropped item stack into the item storage. */
     private static void swallowItem(ServerPlayer p, Stomach s, ItemEntity item) {
         if (!GulpServerConfig.ITEM_STORAGE_ENABLED.get()) {
-            p.displayClientMessage(Component.literal("Item storage is turned off on this server."), true);
+            StomachLogic.say(p, Component.literal("Item storage is turned off on this server."));
             return;
         }
         if (p.containerMenu != p.inventoryMenu) return; // the storage screen is open: don't change it underneath them
@@ -258,7 +258,7 @@ public final class StomachLogic {
         ItemStack left = s.insertItem(stack);
         int taken = before - left.getCount();
         if (taken <= 0) {
-            p.displayClientMessage(Component.literal("Your item storage is full."), true);
+            StomachLogic.say(p, Component.literal("Your item storage is full."));
             return;
         }
         if (left.isEmpty()) item.discard();
@@ -269,7 +269,7 @@ public final class StomachLogic {
     /** Opens the item storage as a chest-style screen (shift-click moves items in and out like a chest). */
     private static void openStorage(ServerPlayer p, StomachManager mgr, Stomach s) {
         if (!GulpServerConfig.ITEM_STORAGE_ENABLED.get()) {
-            p.displayClientMessage(Component.literal("Item storage is turned off on this server."), true);
+            StomachLogic.say(p, Component.literal("Item storage is turned off on this server."));
             return;
         }
         int rows = s.storageRows();
@@ -290,7 +290,7 @@ public final class StomachLogic {
             default -> MenuType.GENERIC_9x6;
         };
         p.openMenu(new SimpleMenuProvider((id, inv, player) -> new ChestMenu(type, id, inv, view, rows),
-                Component.literal("Stomach Storage")));
+                Component.literal(Gulp.STORAGE_TITLE)));
     }
 
     // ------------------------------------------------------------ per-tick
@@ -352,7 +352,7 @@ public final class StomachLogic {
                     damage = Math.min(damage, p.getHealth() - 4f);
                     if (damage > 0f) {
                         p.hurt(p.level().damageSources().generic(), damage);
-                        p.displayClientMessage(Component.empty().append(entryName(e)).append(" struggles inside you!"), true);
+                        StomachLogic.say(p, Component.empty().append(entryName(e)).append(" struggles inside you!"));
                     }
                 }
             } else {
@@ -473,6 +473,11 @@ public final class StomachLogic {
     }
 
     // ------------------------------------------------------------ helpers
+
+    /** Sends a short action-bar message to a player. Their Settings decide whether it is actually shown. */
+    static void say(ServerPlayer p, Component text) {
+        Net.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), new MessagePacket(text));
+    }
 
     /** Tells the player (and anyone nearby) to play a sound. Each client chooses what it actually plays. */
     static void sound(ServerPlayer p, GulpSound type) {

@@ -46,30 +46,30 @@ public final class PlayerHolding {
     /** @return true if the player was swallowed (the caller then adds the cooldown, sound and message) */
     public static boolean swallow(ServerPlayer p, Stomach s, ServerPlayer victim, StomachManager mgr) {
         if (!GulpServerConfig.PLAYER_SWALLOWING_ENABLED.get()) {
-            p.displayClientMessage(Component.literal("Swallowing players is turned off on this server."), true);
+            StomachLogic.say(p, Component.literal("Swallowing players is turned off on this server."));
             return false;
         }
         if (!victim.isAlive() || victim.isSpectator() || isHeld(victim)) {
-            p.displayClientMessage(Component.literal("Nothing swallowable in reach."), true);
+            StomachLogic.say(p, Component.literal("Nothing swallowable in reach."));
             return false;
         }
         if (!mgr.of(victim.getUUID()).allowSwallowed) {
-            p.displayClientMessage(Component.empty().append(victim.getName())
-                    .append(" hasn't allowed being swallowed."), true);
+            StomachLogic.say(p, Component.empty().append(victim.getName())
+                    .append(" hasn't allowed being swallowed."));
             return false;
         }
         float size = Math.max(0.05f, victim.getBbWidth() * victim.getBbWidth() * victim.getBbHeight());
         if (size > s.capacity()) {
-            p.displayClientMessage(Component.literal("Too big for your stomach! (needs " + Stomach.fmtVolume(size)
-                    + ", capacity " + Stomach.fmtVolume(s.capacity()) + ")"), true);
+            StomachLogic.say(p, Component.literal("Too big for your stomach! (needs " + Stomach.fmtVolume(size)
+                    + ", capacity " + Stomach.fmtVolume(s.capacity()) + ")"));
             return false;
         }
         if (s.used() + size > s.capacity()) {
-            p.displayClientMessage(Component.literal("Your stomach is too full."), true);
+            StomachLogic.say(p, Component.literal("Your stomach is too full."));
             return false;
         }
         if (s.contents.size() >= Stomach.MAX_MOBS) {
-            p.displayClientMessage(Component.literal("You can't hold more than " + Stomach.MAX_MOBS + " creatures at once."), true);
+            StomachLogic.say(p, Component.literal("You can't hold more than " + Stomach.MAX_MOBS + " creatures at once."));
             return false;
         }
 
@@ -128,7 +128,7 @@ public final class PlayerHolding {
         restore(victim, held, holder);
         mgr.setDirty();
         if (holder != null) {
-            holder.displayClientMessage(Component.empty().append(victim.getName()).append(" got out."), true);
+            StomachLogic.say(holder, Component.empty().append(victim.getName()).append(" got out."));
             StomachLogic.sync(holder, hs);
             StomachLogic.sound(holder, GulpSound.SPIT);
         }

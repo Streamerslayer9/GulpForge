@@ -35,7 +35,7 @@ public class ScreenLoopSound extends AbstractTickableSoundInstance {
     @Override
     public void tick() {
         Object screen = Minecraft.getInstance().screen;
-        if (!(screen instanceof StomachScreen || screen instanceof PerksScreen
+        if (!(screen instanceof StomachScreen || screen instanceof PerksScreen || screen instanceof PerkTreeScreen
                 || screen instanceof SettingsScreen || screen instanceof SoundsScreen)) {
             stop();
             return;

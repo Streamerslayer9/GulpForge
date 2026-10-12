@@ -28,6 +28,12 @@ public class GulpConfig {
     public static BellyStyle bellyStyle = BellyStyle.STOMACH;
     public static boolean levelUpMessages = true;
 
+    /** The short action-bar messages when you do something (swallow, release, "too big", ...). */
+    public static boolean actionMessages = true;
+
+    /** true = the old list-style perk menu, false = the new look (nodes around a hub). */
+    public static boolean legacyPerkMenu = false;
+
     /** true = the mod's own sounds, false = the Minecraft stand-in sounds. */
     public static boolean useCustomSounds = true;
     private static final boolean[] SOUND_ON = new boolean[GulpSound.values().length];
@@ -57,6 +63,8 @@ public class GulpConfig {
             }
             bellyStyle = BellyStyle.valueOf(props.getProperty("bellyStyle", BellyStyle.STOMACH.name()));
             levelUpMessages = Boolean.parseBoolean(props.getProperty("levelUpMessages", "true"));
+            actionMessages = Boolean.parseBoolean(props.getProperty("actionMessages", "true"));
+            legacyPerkMenu = Boolean.parseBoolean(props.getProperty("legacyPerkMenu", "false"));
             useCustomSounds = Boolean.parseBoolean(props.getProperty("customSounds", "true"));
             for (GulpSound s : GulpSound.values()) {
                 setOn(s, Boolean.parseBoolean(props.getProperty("sound." + s.name(), "true")));
@@ -72,6 +80,8 @@ public class GulpConfig {
             Properties props = new Properties();
             props.setProperty("bellyStyle", bellyStyle.name());
             props.setProperty("levelUpMessages", Boolean.toString(levelUpMessages));
+            props.setProperty("actionMessages", Boolean.toString(actionMessages));
+            props.setProperty("legacyPerkMenu", Boolean.toString(legacyPerkMenu));
             props.setProperty("customSounds", Boolean.toString(useCustomSounds));
             for (GulpSound s : GulpSound.values()) {
                 props.setProperty("sound." + s.name(), Boolean.toString(isOn(s)));

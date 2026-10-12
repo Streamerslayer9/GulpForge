@@ -25,6 +25,8 @@ public final class Net {
                 BellyPacket::handle, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
         CHANNEL.registerMessage(id++, SoundPacket.class, SoundPacket::encode, SoundPacket::decode,
                 SoundPacket::handle, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+        CHANNEL.registerMessage(id++, MessagePacket.class, MessagePacket::encode, MessagePacket::decode,
+                MessagePacket::handle, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
         CHANNEL.registerMessage(id++, LevelUpPacket.class, LevelUpPacket::encode, LevelUpPacket::decode,
                 LevelUpPacket::handle, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
     }

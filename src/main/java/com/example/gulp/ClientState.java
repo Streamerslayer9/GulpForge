@@ -44,6 +44,13 @@ public final class ClientState {
         if (levelUpListener != null) levelUpListener.accept(level, points);
     }
 
+    /** Shows an action-bar message on this client (unless the player turned them off). Set by client setup. */
+    public static java.util.function.Consumer<Component> messageListener;
+
+    public static void fireMessage(Component text) {
+        if (messageListener != null) messageListener.accept(text);
+    }
+
     /** Plays a Gulp sound on this client. Set by client setup (see ClientSounds). */
     public interface SoundListener { void play(int type, double x, double y, double z); }
 

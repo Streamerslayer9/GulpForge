@@ -16,6 +16,9 @@ import net.minecraftforge.registries.RegistryObject;
 public class Gulp {
     public static final String ID = "gulp";
 
+    /** Title of the item storage screen. The client looks for it to add the Back button. */
+    public static final String STORAGE_TITLE = "Stomach Storage";
+
     public static final DeferredRegister<SoundEvent> SOUNDS = DeferredRegister.create(ForgeRegistries.SOUND_EVENTS, ID);
     public static final RegistryObject<SoundEvent> SWALLOW = sound("swallow");
     public static final RegistryObject<SoundEvent> DIGEST = sound("digest");

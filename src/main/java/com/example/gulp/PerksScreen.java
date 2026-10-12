@@ -28,7 +28,7 @@ public class PerksScreen extends Screen {
     private int top() { return (height - H) / 2; }
 
     /** Swap these for your own pixel art later. */
-    private static ItemStack iconFor(Perk perk) {
+    static ItemStack iconFor(Perk perk) {
         return switch (perk) {
             case ROOMY -> new ItemStack(Items.BARREL);
             case HEALING -> new ItemStack(Items.GOLDEN_APPLE);
@@ -60,6 +60,11 @@ public class PerksScreen extends Screen {
             buy.active = ClientState.points() > 0 && ClientState.rank(perk) < perk.maxRank;
             addRenderableWidget(buy);
         }
+        addRenderableWidget(Button.builder(Component.literal("New look"), btn -> {
+            GulpConfig.legacyPerkMenu = false;
+            GulpConfig.save();
+            this.minecraft.setScreen(new PerkTreeScreen());
+        }).bounds(x + 92, y + 2, 64, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Back"), btn -> this.minecraft.setScreen(new StomachScreen()))
                 .bounds(x + 8, y + H - 28, 60, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Close"), btn -> onClose())

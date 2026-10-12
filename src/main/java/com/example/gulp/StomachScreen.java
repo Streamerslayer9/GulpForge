@@ -116,7 +116,7 @@ public class StomachScreen extends Screen {
                 .bounds(x + 8, fy, 76, 20).build());
         addRenderableWidget(Button.builder(
                         Component.literal("Perks (" + ClientState.points() + ")"),
-                        btn -> this.minecraft.setScreen(new PerksScreen()))
+                        btn -> this.minecraft.setScreen(PerkMenus.create()))
                 .bounds(x + 87, fy, 76, 20).build());
         // The server opens the item storage as a chest-style screen, which replaces this one.
         addRenderableWidget(Button.builder(Component.literal("Storage"), btn -> Net.send(7))

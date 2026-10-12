@@ -35,6 +35,11 @@ public final class ClientModEvents {
     public static void onClientSetup(FMLClientSetupEvent e) {
         GulpConfig.load();
         ClientState.soundListener = ClientSounds::playWorld;
+        ClientState.messageListener = text -> {
+            if (!GulpConfig.actionMessages) return;
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player != null) mc.player.displayClientMessage(text, true);
+        };
         ClientState.levelUpListener = (level, points) -> {
             if (!GulpConfig.levelUpMessages) return;
             Minecraft mc = Minecraft.getInstance();

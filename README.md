@@ -37,7 +37,9 @@ Install Minecraft Forge for 1.20.1, then put gulp-0.1.0.jar in the mods folder. 
   current 110 ranks), with none left over and none missing. Most levels give 1 point and about every eighth level
   gives 2 (see Stomach.cumulativePoints). If you add or change perks, the points adjust themselves. Older saves are
   topped up automatically to what their level should have earned.
-  Spend them in N > Perks (click = 1 rank, Shift = 5, Ctrl = as many as you can):
+  Spend them in N > Perks. There are two menus (switch with the Legacy / New look button, or Settings > Perk menu):
+  the new look (every perk is a node around a hub with a progress ring, no connecting lines because nothing unlocks anything)
+  and the legacy list. Click = 1 rank, Shift = 5, Ctrl = as many as you can afford:
   Roomy Stomach (30 ranks, +6% capacity each), Healing Stomach (15, soft mode: held mobs heal 1% of max HP per rank
   every 5s), Better Loot (10, +1 Looting level per 2 ranks on digested mobs, up to V), Quick Gulp (10, swallow
   cooldown -0.075s per rank anywhere and -0.15s per rank when looking up: 2s with no perk, 1.25s / 0.5s at 10 ranks),
@@ -46,7 +48,7 @@ Install Minecraft Forge for 1.20.1, then put gulp-0.1.0.jar in the mods folder. 
 - Aiming: mobs have a slightly bigger hitbox for swallowing, and aiming near a mob (about 12 degrees) still counts.
 - The Ender Dragon and the Wither can never be swallowed.
 - Item storage: look at a dropped item and press V to swallow the stack into your item storage, or press Storage on the
-  stomach screen to open it as a chest-style screen (shift-click moves items in and out). It starts at 1 row (9 slots)
+  stomach screen to open it as a chest-style screen (shift-click moves items in and out; a Back button beside the window returns to the stomach screen). It starts at 1 row (9 slots)
   and gains a row every 17 levels, up to 6 rows (54 slots) at level 85. It is separate from the mob volume, saved with
   the world, safe in both modes, and drops like an inventory if you die (unless keepInventory is on).
 - Swallowing players (multiplayer): only players who turned on "Let players swallow me" in Settings (off by default) can
@@ -59,6 +61,9 @@ Install Minecraft Forge for 1.20.1, then put gulp-0.1.0.jar in the mods folder. 
 ## Visible belly
 The belly of every player model swells forward as their stomach fills (using the player's own skin).
 Other players see it too. Settings > Belly style switches between Classic (whole torso) and Stomach only.
+Settings > Action messages turns the short action-bar messages (Gulp! Swallowed Cow, Too big for your stomach, mode
+changes, struggle warnings ...) on or off. Level-up messages are a separate setting. Messages telling a swallowed player
+they were swallowed and how to get out are always shown.
 Tweak MAX_EXTRA_DEPTH / MAX_EXTRA_WIDTH in BellyLayer.java for how far it sticks out, and
 BELLY_TOP / BELLY_HEIGHT in BellyModel.java for the stomach-only shape.
 Custom player model mods can read the fullness (0..1) from ClientState.bellyAmount(playerUuid).
@@ -84,7 +89,8 @@ To replace a sound, convert it to .ogg (mono for in-world sounds) and keep the s
 ## Multiplayer
 - Everyone (server and every player) needs the mod installed. It is Forge 1.20.1 and works on dedicated servers.
 - Each player has their own stomach, saved with the world. Other players see your belly and hear your sounds.
-- Settings (belly style, sounds, volumes, level-up messages) are per player and saved on that player's computer.
+- Settings (belly style, sounds, volumes, level-up messages, action messages, perk menu) are per player and saved on
+  that player's computer.
 - Pets are protected: you can't swallow another player's tamed animal or horse.
 - Dead and spectating players can't use the stomach; if you die, everything inside is let out.
 - Server admins can edit serverconfig/gulp-server.toml (in the world folder) to: turn hard mode / digesting off
