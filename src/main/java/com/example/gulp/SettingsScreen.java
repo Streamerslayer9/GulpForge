@@ -8,9 +8,9 @@ import net.minecraft.network.chat.Component;
 /** Client-side settings. Saved to config/gulp-client.properties. */
 public class SettingsScreen extends Screen {
     private static final int W = 250;
-    private static final int H = 128;
+    private static final int H = 152;
 
-    private Button bellyButton, levelUpButton;
+    private Button bellyButton, levelUpButton, allowButton;
 
     public SettingsScreen() {
         super(Component.literal("Gulp Settings"));
@@ -22,6 +22,7 @@ public class SettingsScreen extends Screen {
     private void refresh() {
         bellyButton.setMessage(Component.literal("Belly style: " + GulpConfig.bellyStyle.label));
         levelUpButton.setMessage(Component.literal("Level-up messages: " + (GulpConfig.levelUpMessages ? "ON" : "OFF")));
+        allowButton.setMessage(Component.literal("Let players swallow me: " + (ClientState.allowSwallowed() ? "ON" : "OFF")));
     }
 
     @Override
@@ -42,7 +43,12 @@ public class SettingsScreen extends Screen {
             refresh();
         }).bounds(x + 15, y + 46, W - 30, 20).build();
 
+        // This one is kept on the server (it decides whether others may swallow you), not in your local settings file.
+        allowButton = Button.builder(Component.empty(), btn -> Net.send(8))
+                .bounds(x + 15, y + 94, W - 30, 20).build();
+
         addRenderableWidget(bellyButton);
+        addRenderableWidget(allowButton);
         addRenderableWidget(levelUpButton);
         addRenderableWidget(Button.builder(Component.literal("Sounds..."), btn -> this.minecraft.setScreen(new SoundsScreen()))
                 .bounds(x + 15, y + 70, W - 30, 20).build());
@@ -53,6 +59,11 @@ public class SettingsScreen extends Screen {
                 .bounds(x + W - 68, y + H - 28, 60, 20).build());
 
         refresh();
+    }
+
+    @Override
+    public void tick() {
+        refresh(); // the "let players swallow me" label follows what the server says
     }
 
     @Override

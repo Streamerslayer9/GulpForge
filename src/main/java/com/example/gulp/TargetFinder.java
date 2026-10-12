@@ -3,6 +3,7 @@ package com.example.gulp;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.boss.wither.WitherBoss;
 import net.minecraft.world.entity.player.Player;
@@ -27,8 +28,10 @@ public final class TargetFinder {
     private TargetFinder() { }
 
     public static boolean valid(Entity e) {
+        if (e instanceof ItemEntity) return e.isAlive(); // dropped items go into item storage
+        // Mobs and other players (the server decides whether a player may actually be swallowed).
         return e instanceof LivingEntity && e.isAlive() && !e.isSpectator()
-                && !(e instanceof Player) && !(e instanceof EnderDragon) && !(e instanceof WitherBoss);
+                && !(e instanceof EnderDragon) && !(e instanceof WitherBoss);
     }
 
     public static Entity find(Player p, double reach) {

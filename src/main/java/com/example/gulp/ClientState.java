@@ -18,6 +18,7 @@ public final class ClientState {
     public record EntryInfo(int uid, Component name, String typeId, float size, float hp, float maxHp, float digest) { }
 
     private static boolean hard;
+    private static boolean allowSwallowed;
     private static int level = 1, xp, xpNeeded = 100, points;
     private static float used, cap = 1.75f;
     private static int[] ranks = new int[Perk.values().length];
@@ -31,6 +32,7 @@ public final class ClientState {
         used = m.used;
         cap = m.cap;
         points = m.points;
+        allowSwallowed = m.allowSwallowed;
         ranks = m.ranks;
         entries = m.entries;
     }
@@ -58,6 +60,7 @@ public final class ClientState {
         xp = 0;
         xpNeeded = Stomach.xpForNext(1);
         points = 0;
+        allowSwallowed = false;
         used = 0f;
         cap = 1.75f;
         ranks = new int[Perk.values().length];
@@ -68,6 +71,7 @@ public final class ClientState {
     }
 
     public static boolean isHard() { return hard; }
+    public static boolean allowSwallowed() { return allowSwallowed; }
     public static int level() { return level; }
     public static int xp() { return xp; }
     public static int xpNeeded() { return xpNeeded; }

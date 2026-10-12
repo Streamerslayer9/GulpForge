@@ -7,6 +7,7 @@ import net.minecraftforge.event.entity.living.LivingDropsEvent;
 import net.minecraftforge.event.entity.living.LivingExperienceDropEvent;
 import net.minecraftforge.event.entity.living.LootingLevelEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.LogicalSide;
 import net.minecraftforge.fml.common.Mod;
@@ -19,6 +20,7 @@ public final class ServerEvents {
     public static void onPlayerTick(TickEvent.PlayerTickEvent e) {
         if (e.phase != TickEvent.Phase.END || e.side != LogicalSide.SERVER) return;
         if (!(e.player instanceof ServerPlayer p)) return;
+        PlayerHolding.tickHeld(p); // keeps a swallowed player inside
         StomachManager mgr = StomachManager.get(p.getServer());
         StomachLogic.tickPlayer(mgr, p, mgr.of(p.getUUID()));
     }
@@ -26,7 +28,24 @@ public final class ServerEvents {
     @SubscribeEvent
     public static void onLogin(PlayerEvent.PlayerLoggedInEvent e) {
         if (!(e.getEntity() instanceof ServerPlayer p)) return;
+        PlayerHolding.onLogin(p);
         StomachLogic.sync(p, StomachManager.get(p.getServer()).of(p.getUUID()));
+    }
+
+    // Anyone swallowed (or swallowing) when a player leaves is let out, so nobody is left stuck as a spectator.
+    @SubscribeEvent
+    public static void onLogout(PlayerEvent.PlayerLoggedOutEvent e) {
+        if (e.getEntity() instanceof ServerPlayer p) PlayerHolding.onLogout(p);
+    }
+
+    @SubscribeEvent
+    public static void onDimensionChange(PlayerEvent.PlayerChangedDimensionEvent e) {
+        if (e.getEntity() instanceof ServerPlayer p) PlayerHolding.releaseAllHeldBy(p);
+    }
+
+    @SubscribeEvent
+    public static void onServerStopping(ServerStoppingEvent e) {
+        PlayerHolding.onServerStopping(e.getServer());
     }
 
     // Don't lose swallowed mobs if the player dies.

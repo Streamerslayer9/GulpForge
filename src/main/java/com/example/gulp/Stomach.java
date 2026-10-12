@@ -1,8 +1,11 @@
 package com.example.gulp;
 
+import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.world.ContainerHelper;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +32,13 @@ public class Stomach {
     public int points = 0;                                  // unspent perk points
     public final int[] ranks = new int[Perk.values().length];
     public final List<CompoundTag> contents = new ArrayList<>();
+
+    /** Item storage: up to 54 slots, but only the first storageSlots() are usable (it grows with your level). */
+    public final NonNullList<ItemStack> storage = NonNullList.withSize(54, ItemStack.EMPTY);
+
+    /** Other players can only swallow you if you turn this on. Off by default. */
+    public boolean allowSwallowed = false;
+
     public transient int cooldown = 0;
 
     /**
@@ -56,6 +66,34 @@ public class Stomach {
     public double capacity() {
         double base = 1.0 + 0.75 * level + 0.08 * level * level;
         return base * (1.0 + 0.06 * rank(Perk.ROOMY));
+    }
+
+    /** Rows of item storage: 1 at level 1, one more every 17 levels, 6 rows (54 slots) from level 85. */
+    public int storageRows() { return Math.min(6, 1 + level / 17); }
+
+    public int storageSlots() { return storageRows() * 9; }
+
+    /**
+     * Puts an item stack into the usable storage slots (topping up matching stacks first).
+     * @return whatever didn't fit (empty if it all did)
+     */
+    public ItemStack insertItem(ItemStack stack) {
+        ItemStack remaining = stack.copy();
+        int slots = storageSlots();
+        for (int i = 0; i < slots && !remaining.isEmpty(); i++) {
+            ItemStack in = storage.get(i);
+            if (!in.isEmpty() && ItemStack.isSameItemSameTags(in, remaining) && in.getCount() < in.getMaxStackSize()) {
+                int move = Math.min(remaining.getCount(), in.getMaxStackSize() - in.getCount());
+                in.grow(move);
+                remaining.shrink(move);
+            }
+        }
+        for (int i = 0; i < slots && !remaining.isEmpty(); i++) {
+            if (storage.get(i).isEmpty()) {
+                storage.set(i, remaining.split(Math.min(remaining.getCount(), remaining.getMaxStackSize())));
+            }
+        }
+        return remaining;
     }
 
     public double used() {
@@ -95,6 +133,8 @@ public class Stomach {
         CompoundTag perks = new CompoundTag();
         for (Perk p : Perk.values()) perks.putInt(p.name(), ranks[p.ordinal()]);
         nbt.put("Perks", perks);
+        nbt.putBoolean("AllowSwallowed", allowSwallowed);
+        nbt.put("Storage", ContainerHelper.saveAllItems(new CompoundTag(), storage));
         ListTag list = new ListTag();
         list.addAll(contents);
         nbt.put("Contents", list);
@@ -107,6 +147,8 @@ public class Stomach {
         s.level = Math.max(1, nbt.getInt("Level"));
         s.xp = nbt.getInt("Xp");
         s.points = nbt.contains("Points") ? nbt.getInt("Points") : s.level - 1;
+        s.allowSwallowed = nbt.getBoolean("AllowSwallowed");
+        ContainerHelper.loadAllItems(nbt.getCompound("Storage"), s.storage);
         CompoundTag perks = nbt.getCompound("Perks");
         for (Perk p : Perk.values()) s.ranks[p.ordinal()] = Math.min(p.maxRank, perks.getInt(p.name()));
         // Older saves earned fewer points. Top them up so everyone has what a player at their level should have.

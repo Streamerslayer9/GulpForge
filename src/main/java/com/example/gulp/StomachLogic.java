@@ -6,12 +6,18 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.animal.horse.AbstractHorse;
+import net.minecraft.world.inventory.ChestMenu;
+import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.items.ItemHandlerHelper;
 import net.minecraftforge.network.PacketDistributor;
@@ -63,8 +69,15 @@ public final class StomachLogic {
 
     // 0 swallow | 1 toggle mode | 2 release last | 3 release all
     // 4 release entry (arg = uid) | 5 digest entry now (arg = uid) | 6 buy perk (arg = perk index)
+    // 7 open item storage | 8 toggle "let players swallow me"
     public static void handleAction(ServerPlayer p, int action, int arg) {
-        if (p == null || !p.isAlive() || p.isSpectator()) return;
+        if (p == null || !p.isAlive()) return;
+        // A swallowed player can do exactly one thing: get out (the Release key).
+        if (PlayerHolding.isHeld(p)) {
+            if (action == 2 || action == 3) PlayerHolding.escape(p);
+            return;
+        }
+        if (p.isSpectator()) return;
         StomachManager mgr = StomachManager.get(p.getServer());
         Stomach s = mgr.of(p.getUUID());
         switch (action) {
@@ -106,9 +119,21 @@ public final class StomachLogic {
             case 5 -> {
                 int i = indexOf(s, arg);
                 if (i >= 0) {
-                    if (hardModeAllowed()) digest(p, s, s.contents.remove(i), true);
-                    else p.displayClientMessage(Component.literal("Digesting is turned off on this server."), true);
+                    if (PlayerHolding.isPlayerEntry(s.contents.get(i))) {
+                        p.displayClientMessage(Component.literal("Players are only held, never digested."), true);
+                    } else if (hardModeAllowed()) {
+                        digest(p, s, s.contents.remove(i), true);
+                    } else {
+                        p.displayClientMessage(Component.literal("Digesting is turned off on this server."), true);
+                    }
                 }
+            }
+            case 7 -> openStorage(p, mgr, s);
+            case 8 -> {
+                s.allowSwallowed = !s.allowSwallowed;
+                p.displayClientMessage(Component.literal(s.allowSwallowed
+                        ? "Other players can now swallow you (you can always get out with the Release key)."
+                        : "Other players can no longer swallow you."), true);
             }
             case 6 -> {
                 // arg = perk index in the low 8 bits, how many ranks to buy above that (0 or 1 means one)
@@ -147,6 +172,16 @@ public final class StomachLogic {
             }
         }
         if (target == null) target = TargetFinder.find(p, TargetFinder.REACH);
+        if (target instanceof ItemEntity item) {
+            swallowItem(p, s, item);
+            return;
+        }
+        if (target instanceof ServerPlayer victim) {
+            if (PlayerHolding.swallow(p, s, victim, StomachManager.get(p.getServer()))) {
+                finishSwallow(p, s, victim.getName());
+            }
+            return;
+        }
         if (!(target instanceof LivingEntity le)) {
             p.displayClientMessage(Component.literal("Nothing swallowable in reach."), true);
             return;
@@ -195,14 +230,67 @@ public final class StomachLogic {
 
         le.discard();
         s.contents.add(entry);
-        // Quick Gulp perk: looking up makes swallowing faster.
+        finishSwallow(p, s, displayName);
+    }
+
+    /** Starts the swallow cooldown, plays the sound and shows the message. */
+    private static void finishSwallow(ServerPlayer p, Stomach s, Component what) {
         // Quick Gulp perk: every rank takes 0.075s off the cooldown anywhere, and 0.15s when looking up.
         // 2s with no perk; with 10 ranks it is 1.25s anywhere and 0.5s when looking up.
         int quick = s.rank(Perk.QUICK);
         float reduction = (p.getXRot() < -30 ? 3f : 1.5f) * quick; // in ticks (20 per second)
         s.cooldown = Math.max(10, 40 - Math.round(reduction));
         sound(p, GulpSound.SWALLOW);
-        p.displayClientMessage(Component.literal("Gulp! Swallowed ").append(displayName), true);
+        p.displayClientMessage(Component.literal("Gulp! Swallowed ").append(what), true);
+    }
+
+    // ------------------------------------------------------------ item storage
+
+    /** Swallows a dropped item stack into the item storage. */
+    private static void swallowItem(ServerPlayer p, Stomach s, ItemEntity item) {
+        if (!GulpServerConfig.ITEM_STORAGE_ENABLED.get()) {
+            p.displayClientMessage(Component.literal("Item storage is turned off on this server."), true);
+            return;
+        }
+        if (p.containerMenu != p.inventoryMenu) return; // the storage screen is open: don't change it underneath them
+        ItemStack stack = item.getItem();
+        int before = stack.getCount();
+        ItemStack left = s.insertItem(stack);
+        int taken = before - left.getCount();
+        if (taken <= 0) {
+            p.displayClientMessage(Component.literal("Your item storage is full."), true);
+            return;
+        }
+        if (left.isEmpty()) item.discard();
+        else item.setItem(left);
+        finishSwallow(p, s, Component.literal(taken + "x ").append(stack.getHoverName()));
+    }
+
+    /** Opens the item storage as a chest-style screen (shift-click moves items in and out like a chest). */
+    private static void openStorage(ServerPlayer p, StomachManager mgr, Stomach s) {
+        if (!GulpServerConfig.ITEM_STORAGE_ENABLED.get()) {
+            p.displayClientMessage(Component.literal("Item storage is turned off on this server."), true);
+            return;
+        }
+        int rows = s.storageRows();
+        int slots = rows * 9;
+        SimpleContainer view = new SimpleContainer(slots);
+        for (int i = 0; i < slots; i++) view.setItem(i, s.storage.get(i));
+        // Every change made in the screen is copied straight back into the saved storage.
+        view.addListener(c -> {
+            for (int i = 0; i < slots; i++) s.storage.set(i, view.getItem(i));
+            mgr.setDirty();
+        });
+        MenuType<ChestMenu> type = switch (rows) {
+            case 1 -> MenuType.GENERIC_9x1;
+            case 2 -> MenuType.GENERIC_9x2;
+            case 3 -> MenuType.GENERIC_9x3;
+            case 4 -> MenuType.GENERIC_9x4;
+            case 5 -> MenuType.GENERIC_9x5;
+            default -> MenuType.GENERIC_9x6;
+        };
+        p.openMenu(new SimpleMenuProvider((id, inv, player) -> new ChestMenu(type, id, inv, view, rows),
+                Component.literal("Stomach Storage")));
     }
 
     // ------------------------------------------------------------ per-tick
@@ -218,6 +306,14 @@ public final class StomachLogic {
         Iterator<CompoundTag> it = s.contents.iterator();
         while (it.hasNext()) {
             CompoundTag e = it.next();
+            if (PlayerHolding.isPlayerEntry(e)) {
+                // A swallowed player: only held. No digesting, no struggling, no healing.
+                if (!PlayerHolding.tickEntry(p, e)) {
+                    it.remove();
+                    changed = true;
+                }
+                continue;
+            }
             if (hardNow) {
                 // Phase 1: the digestion bar fills up.
                 int d = e.getInt("Digest");
@@ -331,6 +427,7 @@ public final class StomachLogic {
 
     /** @return false if the mob couldn't be recreated (so the caller keeps it instead of losing it) */
     public static boolean release(ServerPlayer p, CompoundTag entry) {
+        if (PlayerHolding.isPlayerEntry(entry)) return PlayerHolding.releaseEntry(p, entry);
         ServerLevel w = p.serverLevel();
         Entity e = EntityType.create(entry.getCompound("Entity"), w).orElse(null);
         if (e == null) return false;
@@ -355,6 +452,16 @@ public final class StomachLogic {
         StomachManager mgr = StomachManager.get(p.getServer());
         Stomach s = mgr.of(p.getUUID());
         s.contents.removeIf(e -> release(p, e));
+        // Stored items drop like an inventory would (unless the keepInventory game rule is on).
+        if (!p.level().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY)) {
+            for (int i = 0; i < s.storage.size(); i++) {
+                ItemStack stack = s.storage.get(i);
+                if (!stack.isEmpty()) {
+                    p.drop(stack, true, false);
+                    s.storage.set(i, ItemStack.EMPTY);
+                }
+            }
+        }
         mgr.setDirty();
         sync(p, s);
     }
@@ -368,7 +475,7 @@ public final class StomachLogic {
     // ------------------------------------------------------------ helpers
 
     /** Tells the player (and anyone nearby) to play a sound. Each client chooses what it actually plays. */
-    private static void sound(ServerPlayer p, GulpSound type) {
+    static void sound(ServerPlayer p, GulpSound type) {
         Net.CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> p),
                 new SoundPacket(type.ordinal(), p.getX(), p.getY(), p.getZ()));
     }

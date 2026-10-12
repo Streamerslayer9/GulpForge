@@ -44,7 +44,16 @@ Install Minecraft Forge for 1.20.1, then put gulp-0.1.0.jar in the mods folder. 
   Iron Stomach (15, -5% struggle damage per rank), Gourmet (20, +5% XP from digesting per rank), Hearty Meal (10, heal
   0.5 HP per rank for every mob you digest). Add more in Perk.java (append to the end).
 - Aiming: mobs have a slightly bigger hitbox for swallowing, and aiming near a mob (about 12 degrees) still counts.
-- The Ender Dragon, the Wither and players can never be swallowed.
+- The Ender Dragon and the Wither can never be swallowed.
+- Item storage: look at a dropped item and press V to swallow the stack into your item storage, or press Storage on the
+  stomach screen to open it as a chest-style screen (shift-click moves items in and out). It starts at 1 row (9 slots)
+  and gains a row every 17 levels, up to 6 rows (54 slots) at level 85. It is separate from the mob volume, saved with
+  the world, safe in both modes, and drops like an inventory if you die (unless keepInventory is on).
+- Swallowing players (multiplayer): only players who turned on "Let players swallow me" in Settings (off by default) can
+  be swallowed. Swallowed players are only held: never hurt or digested. They see through the swallower's eyes (spectator
+  mode) and can get out at any time with the Release key (default G). They are also let out automatically after a while
+  (playerMaxHoldSeconds), when the swallower dies, logs out, changes dimension or the server stops. Their game mode is
+  remembered (even through a crash) and restored when they get out.
 - Stomach contents are saved with the world. Dying releases everything.
 
 ## Visible belly
@@ -79,7 +88,8 @@ To replace a sound, convert it to .ogg (mono for in-world sounds) and keep the s
 - Pets are protected: you can't swallow another player's tamed animal or horse.
 - Dead and spectating players can't use the stomach; if you die, everything inside is let out.
 - Server admins can edit serverconfig/gulp-server.toml (in the world folder) to: turn hard mode / digesting off
-  (hardModeEnabled), scale struggle damage (struggleDamageMultiplier, 0 = never hurts), and scale XP (xpMultiplier).
+  (hardModeEnabled), scale struggle damage (struggleDamageMultiplier, 0 = never hurts), and scale XP (xpMultiplier), turn item storage off (itemStorageEnabled), turn player swallowing off
+  (playerSwallowingEnabled) and set the longest a player can be held (playerMaxHoldSeconds).
 
 ## Mod info
 Name: Vore Mod. Description: This Mod adds Vore to your world with progression, perks and capacity to carry mobs

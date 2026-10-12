@@ -7,6 +7,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.SpawnEggItem;
 import net.minecraftforge.registries.ForgeRegistries;
 
@@ -61,6 +62,7 @@ public class StomachScreen extends Screen {
     /** The mob's spawn egg as its icon. If the mob has no spawn egg (many modded mobs), the icon is left empty. */
     private static ItemStack iconFor(String typeId) {
         return ICONS.computeIfAbsent(typeId, id -> {
+            if ("minecraft:player".equals(id)) return new ItemStack(Items.PLAYER_HEAD);
             Optional<EntityType<?>> type = EntityType.byString(id);
             if (type.isPresent()) {
                 SpawnEggItem egg = eggFor(type.get());
@@ -101,19 +103,24 @@ public class StomachScreen extends Screen {
             int ry = y + HEADER + i * ROW_H;
             addRenderableWidget(Button.builder(Component.literal("Release"), btn -> Net.send(4, e.uid()))
                     .bounds(x + W - 108, ry + 4, 50, 20).build());
-            addRenderableWidget(Button.builder(Component.literal("Digest"), btn -> Net.send(5, e.uid()))
-                    .bounds(x + W - 56, ry + 4, 48, 20).build());
+            Button digest = Button.builder(Component.literal("Digest"), btn -> Net.send(5, e.uid()))
+                    .bounds(x + W - 56, ry + 4, 48, 20).build();
+            digest.active = !"minecraft:player".equals(e.typeId()); // swallowed players are only held, never digested
+            addRenderableWidget(digest);
         }
 
         int fy = y + HEADER + ROWS * ROW_H + 6;
         addRenderableWidget(Button.builder(
-                        Component.literal(ClientState.isHard() ? "Mode: HARD (digest)" : "Mode: SOFT (hold)"),
+                        Component.literal(ClientState.isHard() ? "Hard mode" : "Soft mode"),
                         btn -> Net.send(1))
-                .bounds(x + 8, fy, 112, 20).build());
+                .bounds(x + 8, fy, 76, 20).build());
         addRenderableWidget(Button.builder(
-                        Component.literal("Perks (" + ClientState.points() + " pts)"),
+                        Component.literal("Perks (" + ClientState.points() + ")"),
                         btn -> this.minecraft.setScreen(new PerksScreen()))
-                .bounds(x + 126, fy, 116, 20).build());
+                .bounds(x + 87, fy, 76, 20).build());
+        // The server opens the item storage as a chest-style screen, which replaces this one.
+        addRenderableWidget(Button.builder(Component.literal("Storage"), btn -> Net.send(7))
+                .bounds(x + 166, fy, 76, 20).build());
 
         Button prev = Button.builder(Component.literal("<"), btn -> { page--; clearWidgets(); init(); })
                 .bounds(x + 8, fy + 26, 20, 20).build();
