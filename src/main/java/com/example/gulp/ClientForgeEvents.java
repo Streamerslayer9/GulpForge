@@ -17,6 +17,7 @@ public final class ClientForgeEvents {
     @SubscribeEvent
     public static void onLogout(ClientPlayerNetworkEvent.LoggingOut e) {
         ClientState.reset();
+        CpmDriver.reset();
         ScreenLoop.stop();
     }
 
@@ -25,6 +26,7 @@ public final class ClientForgeEvents {
         if (e.phase != TickEvent.Phase.END) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
+        CpmDriver.tick(); // Custom Player Models belly sliders (does nothing without CPM)
 
         while (ClientModEvents.SWALLOW_KEY.consumeClick()) {
             // Use what the player actually sees on their screen, so wandering mobs and lag don't cause misses.

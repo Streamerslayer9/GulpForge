@@ -8,9 +8,9 @@ import net.minecraft.network.chat.Component;
 /** Client-side settings. Saved to config/gulp-client.properties. */
 public class SettingsScreen extends Screen {
     private static final int W = 250;
-    private static final int H = 200;
+    private static final int H = 224;
 
-    private Button bellyButton, levelUpButton, actionButton, allowButton, perkMenuButton;
+    private Button bellyButton, levelUpButton, actionButton, allowButton, perkMenuButton, cpmButton;
 
     public SettingsScreen() {
         super(Component.literal("Gulp Settings"));
@@ -23,6 +23,8 @@ public class SettingsScreen extends Screen {
         bellyButton.setMessage(Component.literal("Belly style: " + GulpConfig.bellyStyle.label));
         levelUpButton.setMessage(Component.literal("Level-up messages: " + (GulpConfig.levelUpMessages ? "ON" : "OFF")));
         actionButton.setMessage(Component.literal("Action messages: " + (GulpConfig.actionMessages ? "ON" : "OFF")));
+        cpmButton.setMessage(Component.literal("CPM belly sliders: " + (GulpConfig.cpmSliders ? "ON" : "OFF")
+                + (CpmBridge.available() ? "" : " (CPM not found)")));
         perkMenuButton.setMessage(Component.literal("Perk menu: " + (GulpConfig.legacyPerkMenu ? "Legacy" : "New look")));
         allowButton.setMessage(Component.literal("Let players swallow me: " + (ClientState.allowSwallowed() ? "ON" : "OFF")));
     }
@@ -62,7 +64,15 @@ public class SettingsScreen extends Screen {
             refresh();
         }).bounds(x + 15, y + 142, W - 30, 20).build();
 
+        // Custom Player Models: your model's belly animations follow how full you are.
+        cpmButton = Button.builder(Component.empty(), btn -> {
+            GulpConfig.cpmSliders = !GulpConfig.cpmSliders;
+            GulpConfig.save();
+            refresh();
+        }).bounds(x + 15, y + 166, W - 30, 20).build();
+
         addRenderableWidget(bellyButton);
+        addRenderableWidget(cpmButton);
         addRenderableWidget(actionButton);
         addRenderableWidget(perkMenuButton);
         addRenderableWidget(allowButton);

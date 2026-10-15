@@ -1,5 +1,6 @@
 package com.example.gulp;
 
+import com.mojang.logging.LogUtils;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -14,13 +15,17 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.animal.horse.AbstractHorse;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.items.ItemHandlerHelper;
 import net.minecraftforge.network.PacketDistributor;
+
+import org.slf4j.Logger;
 
 import java.util.Collection;
 import java.util.Iterator;
@@ -28,6 +33,8 @@ import java.util.UUID;
 
 /** All the server-side stomach rules. */
 public final class StomachLogic {
+    private static final Logger LOGGER = LogUtils.getLogger();
+
     /** Hard mode only: each swallowed mob has this chance every second to struggle and hurt you. */
     private static final float STRUGGLE_CHANCE_PER_SECOND = 0.08f;
 
@@ -70,6 +77,7 @@ public final class StomachLogic {
     // 0 swallow | 1 toggle mode | 2 release last | 3 release all
     // 4 release entry (arg = uid) | 5 digest entry now (arg = uid) | 6 buy perk (arg = perk index)
     // 7 open item storage | 8 toggle "let players swallow me"
+    // 9 swallow the item in an inventory slot (arg = slot in the inventory screen, plus 65536 for just one item)
     public static void handleAction(ServerPlayer p, int action, int arg) {
         if (p == null || !p.isAlive()) return;
         // A swallowed player can do exactly one thing: get out (the Release key).
@@ -129,6 +137,7 @@ public final class StomachLogic {
                 }
             }
             case 7 -> openStorage(p, mgr, s);
+            case 9 -> swallowFromInventorySlot(p, s, arg);
             case 8 -> {
                 s.allowSwallowed = !s.allowSwallowed;
                 StomachLogic.say(p, Component.literal(s.allowSwallowed
@@ -211,6 +220,7 @@ public final class StomachLogic {
             return;
         }
         le.stopRiding();
+        McaIntegration.onSwallow(p, s, le); // MCA villagers react first, so what they feel is saved with them
         CompoundTag tag = new CompoundTag();
         if (!le.save(tag)) return;
 
@@ -266,6 +276,39 @@ public final class StomachLogic {
         finishSwallow(p, s, Component.literal(taken + "x ").append(stack.getHoverName()));
     }
 
+    /**
+     * The inventory-screen hotkey: swallows the item under the mouse (the whole stack, or just one if asked) into the
+     * item storage. Only the player's own inventory and hotbar count: never armor, the offhand or crafting slots.
+     */
+    private static void swallowFromInventorySlot(ServerPlayer p, Stomach s, int arg) {
+        if (!GulpServerConfig.ITEM_STORAGE_ENABLED.get()) {
+            say(p, Component.literal("Item storage is turned off on this server."));
+            return;
+        }
+        if (p.containerMenu != p.inventoryMenu) return; // only from the plain inventory screen
+        int slotId = arg & 0xFFFF;
+        boolean justOne = (arg & (1 << 16)) != 0;
+        if (slotId < 0 || slotId >= p.inventoryMenu.slots.size()) return;
+        Slot slot = p.inventoryMenu.getSlot(slotId);
+        if (!(slot.container instanceof Inventory) || slot.getSlotIndex() >= 36 || !slot.hasItem()) return;
+
+        ItemStack stack = slot.getItem();
+        int wanted = justOne ? 1 : stack.getCount();
+        ItemStack offer = stack.copy();
+        offer.setCount(wanted);
+        ItemStack left = s.insertItem(offer);
+        int taken = wanted - left.getCount();
+        if (taken <= 0) {
+            say(p, Component.literal("Your item storage is full."));
+            return;
+        }
+        Component name = stack.getHoverName();
+        slot.remove(taken); // takes them out of the inventory slot
+        p.containerMenu.broadcastChanges();
+        sound(p, GulpSound.SWALLOW);
+        say(p, Component.literal("Gulp! Swallowed " + taken + "x ").append(name));
+    }
+
     /** Opens the item storage as a chest-style screen (shift-click moves items in and out like a chest). */
     private static void openStorage(ServerPlayer p, StomachManager mgr, Stomach s) {
         if (!GulpServerConfig.ITEM_STORAGE_ENABLED.get()) {
@@ -280,6 +323,7 @@ public final class StomachLogic {
         view.addListener(c -> {
             for (int i = 0; i < slots; i++) s.storage.set(i, view.getItem(i));
             mgr.setDirty();
+            sync(p, s); // keeps the client (and a CPM belly) up to date as you move items in and out
         });
         MenuType<ChestMenu> type = switch (rows) {
             case 1 -> MenuType.GENERIC_9x1;
@@ -297,6 +341,12 @@ public final class StomachLogic {
 
     public static void tickPlayer(StomachManager mgr, ServerPlayer p, Stomach s) {
         if (s.cooldown > 0) s.cooldown--;
+        // MCA: the "predator" status fades by 1 every few seconds, so villagers eventually forgive you.
+        if (s.predator > 0 && p.tickCount % (GulpServerConfig.MCA_PREDATOR_DECAY_SECONDS.get() * 20) == 0) {
+            s.predator--;
+            sync(p, s);
+            mgr.setDirty();
+        }
         if (s.contents.isEmpty()) return;
 
         boolean changed = false;
@@ -314,6 +364,7 @@ public final class StomachLogic {
                 }
                 continue;
             }
+            e.putInt("HeldTicks", e.getInt("HeldTicks") + 1); // how long this mob has been inside
             if (hardNow) {
                 // Phase 1: the digestion bar fills up.
                 int d = e.getInt("Digest");
@@ -391,6 +442,7 @@ public final class StomachLogic {
             // The mob is never added to the world, so nobody sees it for even a moment. Its loot and XP are
             // intercepted (see ServerEvents) and go straight into your inventory instead of onto the ground.
             if (e instanceof LivingEntity le) {
+                McaIntegration.onDigest(p, s, le); // MCA: predator status, witnesses panic
                 le.setSilent(true); // no death groan: the Digestion sound plays instead
                 digestingPlayer = p;
                 digestingMob = le;
@@ -401,6 +453,15 @@ public final class StomachLogic {
                     // giant modded mob dies from it.
                     le.hurt(w.damageSources().playerAttack(p), Math.max(10000f, le.getMaxHealth() * 2f));
                     if (le.isAlive()) le.kill(); // something blocked the hit: make sure it can't walk away
+                } catch (RuntimeException ex) {
+                    // A modded mob's death code threw an error. Never let that crash the server: let it die normally.
+                    LOGGER.warn("Vore Mod: {} threw an error while being digested; letting it die normally instead.", le.getType(), ex);
+                    try {
+                        w.addFreshEntity(le);
+                        le.kill();
+                    } catch (RuntimeException ex2) {
+                        LOGGER.warn("Vore Mod: that mob also couldn't be killed normally.", ex2);
+                    }
                 } finally {
                     pendingLooting = 0;
                     digestingPlayer = null;
@@ -440,11 +501,15 @@ public final class StomachLogic {
         }
         e.setDeltaMovement(Vec3.ZERO);
         e.fallDistance = 0f;
-        if (!w.addFreshEntity(e)) {
+        boolean added = w.addFreshEntity(e);
+        if (!added) {
             e.setUUID(UUID.randomUUID()); // an old copy with the same id is still around
-            return w.addFreshEntity(e);
+            added = w.addFreshEntity(e);
         }
-        return true;
+        if (added) {
+            McaIntegration.onRelease(p, StomachManager.get(p.getServer()).of(p.getUUID()), e, entry.getInt("HeldTicks"));
+        }
+        return added;
     }
 
     /** Called when a player dies: let everything out so nothing is lost. */

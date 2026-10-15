@@ -14,6 +14,13 @@ public final class GulpServerConfig {
     public static final ForgeConfigSpec.BooleanValue ITEM_STORAGE_ENABLED;
     public static final ForgeConfigSpec.BooleanValue PLAYER_SWALLOWING_ENABLED;
     public static final ForgeConfigSpec.IntValue PLAYER_MAX_HOLD_SECONDS;
+    public static final ForgeConfigSpec.BooleanValue MCA_ENABLED;
+    public static final ForgeConfigSpec.DoubleValue MCA_REACTION_MULTIPLIER;
+    public static final ForgeConfigSpec.BooleanValue MCA_LOCKOUT_ENABLED;
+    public static final ForgeConfigSpec.IntValue MCA_PREDATOR_LOCK;
+    public static final ForgeConfigSpec.IntValue MCA_HEARTS_LOCK;
+    public static final ForgeConfigSpec.IntValue MCA_PREDATOR_DECAY_SECONDS;
+    public static final ForgeConfigSpec.BooleanValue MCA_PANIC;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -37,6 +44,29 @@ public final class GulpServerConfig {
         PLAYER_MAX_HOLD_SECONDS = b
                 .comment("Longest a swallowed player is held before they are let out automatically.")
                 .defineInRange("playerMaxHoldSeconds", 300, 10, 3600);
+        MCA_ENABLED = b
+                .comment("Minecraft Comes Alive reactions (only does anything if MCA is installed): swallowing villagers changes",
+                        "how they feel about you, and a 'predator' status makes frightened villagers refuse to talk to you.")
+                .define("mcaIntegrationEnabled", true);
+        MCA_REACTION_MULTIPLIER = b
+                .comment("Scales every change to villagers' hearts and mood. 0 = villagers never react, 2 = twice as strongly.")
+                .defineInRange("mcaReactionMultiplier", 1.0, 0.0, 5.0);
+        MCA_LOCKOUT_ENABLED = b
+                .comment("If false, villagers never refuse to talk, trade or marry because of your predator status.")
+                .define("mcaLockoutEnabled", true);
+        MCA_PREDATOR_LOCK = b
+                .comment("Predator status at which frightened villagers refuse to talk to you.",
+                        "Swallowing a villager in hard mode adds about 15, digesting one about 25.")
+                .defineInRange("mcaPredatorLockThreshold", 30, 1, 200);
+        MCA_HEARTS_LOCK = b
+                .comment("A villager whose hearts for you are at or below this also refuses to talk while your predator status is above 0.")
+                .defineInRange("mcaHeartsLockThreshold", -30, -500, 0);
+        MCA_PREDATOR_DECAY_SECONDS = b
+                .comment("Seconds for the predator status to drop by 1 (at the default 20, a status of 40 fades in about 13 minutes).")
+                .defineInRange("mcaPredatorDecaySeconds", 20, 1, 3600);
+        MCA_PANIC = b
+                .comment("If true, villagers who see you swallow or digest a villager run from you for a few seconds.")
+                .define("mcaVillagersPanic", true);
         SPEC = b.build();
     }
 

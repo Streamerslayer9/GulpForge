@@ -14,6 +14,8 @@ public class SyncPacket {
     public boolean hard;
     public int level, xp, xpNeeded, points;
     public boolean allowSwallowed;
+    public int predator;
+    public float itemFill;
     public float used, cap;
     public int[] ranks = new int[Perk.values().length];
     public List<ClientState.EntryInfo> entries = new ArrayList<>();
@@ -28,6 +30,8 @@ public class SyncPacket {
         m.cap = (float) s.capacity();
         m.points = s.points;
         m.allowSwallowed = s.allowSwallowed;
+        m.predator = s.predator;
+        m.itemFill = s.itemFill();
         for (Perk p : Perk.values()) m.ranks[p.ordinal()] = s.rank(p);
         for (CompoundTag e : s.contents) {
             CompoundTag ent = e.getCompound("Entity");
@@ -49,6 +53,8 @@ public class SyncPacket {
         buf.writeFloat(m.cap);
         buf.writeInt(m.points);
         buf.writeBoolean(m.allowSwallowed);
+        buf.writeInt(m.predator);
+        buf.writeFloat(m.itemFill);
         buf.writeInt(m.ranks.length);
         for (int r : m.ranks) buf.writeInt(r);
         buf.writeInt(m.entries.size());
@@ -73,6 +79,8 @@ public class SyncPacket {
         m.cap = buf.readFloat();
         m.points = buf.readInt();
         m.allowSwallowed = buf.readBoolean();
+        m.predator = buf.readInt();
+        m.itemFill = buf.readFloat();
         int perkCount = buf.readInt();
         for (int i = 0; i < perkCount; i++) {
             int v = buf.readInt();

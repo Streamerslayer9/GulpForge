@@ -14,7 +14,9 @@ public class GulpConfig {
         /** The original look: the whole torso (chest to waist) swells forward. */
         CLASSIC("Classic (whole torso)"),
         /** Only the lower stomach area swells; the chest stays flat. */
-        STOMACH("Stomach only");
+        STOMACH("Stomach only"),
+        /** No built-in belly at all (for players whose Custom Player Model already has its own belly). */
+        OFF("Off (my model has one)");
 
         public final String label;
         BellyStyle(String label) { this.label = label; }
@@ -30,6 +32,13 @@ public class GulpConfig {
 
     /** The short action-bar messages when you do something (swallow, release, "too big", ...). */
     public static boolean actionMessages = true;
+
+    /** Custom Player Models: drive the model's belly animations from your stomach (does nothing without CPM). */
+    public static boolean cpmSliders = true;
+    /** Names of the animations in your CPM model. Change them in config/gulp-client.properties. */
+    public static String cpmBellyName = "belly";
+    public static String cpmMobsName = "belly_mobs";
+    public static String cpmItemsName = "belly_items";
 
     /** true = the old list-style perk menu, false = the new look (nodes around a hub). */
     public static boolean legacyPerkMenu = false;
@@ -64,6 +73,10 @@ public class GulpConfig {
             bellyStyle = BellyStyle.valueOf(props.getProperty("bellyStyle", BellyStyle.STOMACH.name()));
             levelUpMessages = Boolean.parseBoolean(props.getProperty("levelUpMessages", "true"));
             actionMessages = Boolean.parseBoolean(props.getProperty("actionMessages", "true"));
+            cpmSliders = Boolean.parseBoolean(props.getProperty("cpmSliders", "true"));
+            cpmBellyName = props.getProperty("cpmBellyName", "belly").trim();
+            cpmMobsName = props.getProperty("cpmMobsName", "belly_mobs").trim();
+            cpmItemsName = props.getProperty("cpmItemsName", "belly_items").trim();
             legacyPerkMenu = Boolean.parseBoolean(props.getProperty("legacyPerkMenu", "false"));
             useCustomSounds = Boolean.parseBoolean(props.getProperty("customSounds", "true"));
             for (GulpSound s : GulpSound.values()) {
@@ -81,6 +94,10 @@ public class GulpConfig {
             props.setProperty("bellyStyle", bellyStyle.name());
             props.setProperty("levelUpMessages", Boolean.toString(levelUpMessages));
             props.setProperty("actionMessages", Boolean.toString(actionMessages));
+            props.setProperty("cpmSliders", Boolean.toString(cpmSliders));
+            props.setProperty("cpmBellyName", cpmBellyName);
+            props.setProperty("cpmMobsName", cpmMobsName);
+            props.setProperty("cpmItemsName", cpmItemsName);
             props.setProperty("legacyPerkMenu", Boolean.toString(legacyPerkMenu));
             props.setProperty("customSounds", Boolean.toString(useCustomSounds));
             for (GulpSound s : GulpSound.values()) {

@@ -1,16 +1,22 @@
 package com.example.gulp;
 
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.Entity;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingDropsEvent;
 import net.minecraftforge.event.entity.living.LivingExperienceDropEvent;
 import net.minecraftforge.event.entity.living.LootingLevelEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.LogicalSide;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.server.ServerLifecycleHooks;
 
 @Mod.EventBusSubscriber(modid = Gulp.ID)
 public final class ServerEvents {
@@ -41,6 +47,36 @@ public final class ServerEvents {
     @SubscribeEvent
     public static void onDimensionChange(PlayerEvent.PlayerChangedDimensionEvent e) {
         if (e.getEntity() instanceof ServerPlayer p) PlayerHolding.releaseAllHeldBy(p);
+    }
+
+    // ---- MCA: frightened villagers refuse to talk, trade or marry you (all of those start with a right-click)
+
+    @SubscribeEvent
+    public static void onVillagerClick(PlayerInteractEvent.EntityInteract e) {
+        refuseIfAfraid(e, e.getTarget());
+    }
+
+    @SubscribeEvent
+    public static void onVillagerClickAt(PlayerInteractEvent.EntityInteractSpecific e) {
+        refuseIfAfraid(e, e.getTarget());
+    }
+
+    private static void refuseIfAfraid(PlayerInteractEvent e, Entity target) {
+        if (e.getLevel().isClientSide() || e.getHand() != InteractionHand.MAIN_HAND) return;
+        if (!(e.getEntity() instanceof ServerPlayer p)) return;
+        Component refusal = McaIntegration.refusal(p, target);
+        if (refusal == null) return;
+        if (McaIntegration.shouldTell(p)) StomachLogic.say(p, refusal);
+        e.setCanceled(true);
+        e.setCancellationResult(InteractionResult.SUCCESS);
+    }
+
+    // Keeps villagers who just saw something frightening running for a few seconds.
+    @SubscribeEvent
+    public static void onServerTick(TickEvent.ServerTickEvent e) {
+        if (e.phase != TickEvent.Phase.END) return;
+        var server = ServerLifecycleHooks.getCurrentServer();
+        if (server != null && server.getTickCount() % 10 == 0) McaIntegration.tickScared(server);
     }
 
     @SubscribeEvent

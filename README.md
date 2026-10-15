@@ -47,7 +47,9 @@ Install Minecraft Forge for 1.20.1, then put gulp-0.1.0.jar in the mods folder. 
   0.5 HP per rank for every mob you digest). Add more in Perk.java (append to the end).
 - Aiming: mobs have a slightly bigger hitbox for swallowing, and aiming near a mob (about 12 degrees) still counts.
 - The Ender Dragon and the Wither can never be swallowed.
-- Item storage: look at a dropped item and press V to swallow the stack into your item storage, or press Storage on the
+- Item storage: look at a dropped item and press V to swallow the stack into your item storage; or open your inventory, point at
+  an item and press V (rebindable: "Swallow Hovered Item (in Inventory)") to swallow that stack, holding Ctrl for just one. Only your
+  own inventory and hotbar count, not armor, the offhand or the crafting grid. You can also press Storage on the
   stomach screen to open it as a chest-style screen (shift-click moves items in and out; a Back button beside the window returns to the stomach screen). It starts at 1 row (9 slots)
   and gains a row every 17 levels, up to 6 rows (54 slots) at level 85. It is separate from the mob volume, saved with
   the world, safe in both modes, and drops like an inventory if you die (unless keepInventory is on).
@@ -85,6 +87,45 @@ To replace a sound, convert it to .ogg (mono for in-world sounds) and keep the s
 
 ## Art hooks
 - HUD is drawn with plain rectangles in GulpHud.java; perk icons are in PerksScreen.iconFor().
+
+## Minecraft Comes Alive (MCA Reborn)
+Optional: if MCA is installed, villagers react to what you do (nothing changes if it isn't). MCA is reached by name, not as
+a build dependency, so the mod builds and runs the same either way. If MCA ever changes in a way that breaks this, the
+reactions switch themselves off with one line in the log.
+- Hearts and mood: swallowing a villager changes how it feels about you (MCA hearts and mood, with MCA's own particles).
+  Hard mode: about -40 hearts (the villager ends up "depressed"); soft mode: about -10. Nearby villagers who see it react too
+  (up to 12 within 16 blocks), and non-guard witnesses panic and run from you for a few seconds.
+- Villagers who enjoy it: by MCA personality. Peppy, Confident, Athletic and Odd villagers enjoy being carried safely:
+  +15 hearts and a happy mood on a soft swallow, and +5 up to +25 more when you let them out (the longer the ride, the
+  more). Sensitive, Shy, Gloomy and Grumpy villagers hate it most (-25 soft, -50 hard). Everyone else dislikes it a little.
+  Nobody likes hard mode, but fans mind it far less (-10).
+- MCA has no "scared" or "angry" mood (its moods are depressed, sad, unhappy, passive, fine, happy, overjoyed), so fear shows as
+  the lowest mood plus the panic behaviour.
+- Digesting a villager also triggers MCA's own death rules (witnesses lose hearts, family grieves, a headstone may appear).
+- Predator status: swallowing a villager adds to it (hard 15, soft 3; digesting adds about 25; fans count for less) and it
+  fades by 1 every 20 seconds. It is shown on the stomach screen. At 30 or more, villagers who are afraid of you refuse to
+  talk, trade or marry you ("X is too afraid of you to talk"), except villagers who enjoy it. Any villager whose hearts for
+  you are -30 or lower also refuses while the status lasts. When it fades, everyone talks to you again.
+- Server settings (gulp-server.toml): mcaIntegrationEnabled, mcaReactionMultiplier (0 = no reactions), mcaLockoutEnabled,
+  mcaPredatorLockThreshold, mcaHeartsLockThreshold, mcaPredatorDecaySeconds, mcaVillagersPanic.
+
+## Custom Player Models (CPM) belly sliders
+Optional: if Custom Player Models is installed, your model's belly can follow how full you are. (Nothing changes without CPM.)
+It runs on your own client, so it works even if the server doesn't have CPM; CPM then shares it with other players the way it
+shares any animation.
+- For the model's author: in the CPM editor, add animations to the model as value layers (so they can sit anywhere from
+  "empty" to "full") and give them these names:
+    belly        how full you are overall (creatures, plus your item storage counting half as much)
+    belly_mobs   how full of creatures you are (their volume compared to your capacity)
+    belly_items  how full your item storage is
+  Use any of them, or all three. Each is set between 0 and the maximum the model allows for that animation (the mod reads the
+  maximum from the model, so any range works). An animation the model doesn't have is skipped. Values ease toward their
+  target, so the belly grows and shrinks smoothly.
+- Names can be changed in config/gulp-client.properties (cpmBellyName, cpmMobsName, cpmItemsName). Settings > CPM belly
+  sliders switches it off; Settings > Belly style > "Off (my model has one)" turns off the built-in bulge. If your own model
+  has a "belly" animation, the built-in bulge steps aside for you automatically.
+- How it's built: CPM finds the @CPMPlugin class (CpmPlugin) by itself. The few CPM signatures used are compiled against
+  stand-ins in src/cpmApi (never put in the jar), so the mod builds without CPM and the real CPM classes are used at runtime.
 
 ## Multiplayer
 - Everyone (server and every player) needs the mod installed. It is Forge 1.20.1 and works on dedicated servers.

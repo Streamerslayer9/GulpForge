@@ -40,8 +40,19 @@ minecraft {
     }
 }
 
+sourceSets {
+    // Stand-ins for the few Custom Player Models API signatures we use. They are only for compiling and are
+    // never put in the jar: when CPM is installed, its own real classes are used.
+    cpmApi {
+        java {
+            srcDir 'src/cpmApi/java'
+        }
+    }
+}
+
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    compileOnly sourceSets.cpmApi.output
 }
 
 tasks.named('processResources', ProcessResources).configure {

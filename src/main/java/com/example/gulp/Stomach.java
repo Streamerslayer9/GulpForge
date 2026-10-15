@@ -39,6 +39,9 @@ public class Stomach {
     /** Other players can only swallow you if you turn this on. Off by default. */
     public boolean allowSwallowed = false;
 
+    /** MCA: "predator" status. Grows when you swallow/digest villagers, fades with time (see McaIntegration). */
+    public int predator = 0;
+
     public transient int cooldown = 0;
 
     /**
@@ -96,6 +99,17 @@ public class Stomach {
         return remaining;
     }
 
+    /** How full the item storage is, 0 to 1 (each slot counts by how full its stack is). */
+    public float itemFill() {
+        int slots = storageSlots();
+        float total = 0f;
+        for (int i = 0; i < slots; i++) {
+            ItemStack stack = storage.get(i);
+            if (!stack.isEmpty()) total += stack.getCount() / (float) stack.getMaxStackSize();
+        }
+        return Math.min(1f, total / slots);
+    }
+
     public double used() {
         double total = 0;
         for (CompoundTag e : contents) total += e.getFloat("Size");
@@ -134,6 +148,7 @@ public class Stomach {
         for (Perk p : Perk.values()) perks.putInt(p.name(), ranks[p.ordinal()]);
         nbt.put("Perks", perks);
         nbt.putBoolean("AllowSwallowed", allowSwallowed);
+        nbt.putInt("Predator", predator);
         nbt.put("Storage", ContainerHelper.saveAllItems(new CompoundTag(), storage));
         ListTag list = new ListTag();
         list.addAll(contents);
@@ -148,6 +163,7 @@ public class Stomach {
         s.xp = nbt.getInt("Xp");
         s.points = nbt.contains("Points") ? nbt.getInt("Points") : s.level - 1;
         s.allowSwallowed = nbt.getBoolean("AllowSwallowed");
+        s.predator = Math.max(0, nbt.getInt("Predator"));
         ContainerHelper.loadAllItems(nbt.getCompound("Storage"), s.storage);
         CompoundTag perks = nbt.getCompound("Perks");
         for (Perk p : Perk.values()) s.ranks[p.ordinal()] = Math.min(p.maxRank, perks.getInt(p.name()));

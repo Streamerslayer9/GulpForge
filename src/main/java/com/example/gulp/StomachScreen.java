@@ -175,6 +175,12 @@ public class StomachScreen extends Screen {
         g.fill(bx, by, bx + fill, by + 10, ClientState.isHard() ? 0xFFC0502E : 0xFF5DB85D);
         g.drawString(font, Stomach.fmtVolume(ClientState.used()) + " / " + Stomach.fmtVolume(ClientState.cap()), bx + 4, by + 1, 0xFFFFFF, true);
 
+        // MCA: shown only while villagers are afraid of you (it fades with time)
+        if (ClientState.predator() > 0) {
+            g.drawString(font, "Villagers fear you: " + ClientState.predator(), x + 8, y + 32,
+                    ClientState.predator() >= 30 ? 0xFFFF6B6B : 0xFFE0A050, false);
+        }
+
         // Rows
         List<ClientState.EntryInfo> list = ClientState.entries();
         int start = page * ROWS;

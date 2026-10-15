@@ -1,6 +1,11 @@
 package com.example.gulp;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.ContainerScreen;
 import net.minecraft.network.chat.Component;
@@ -13,6 +18,22 @@ import net.minecraftforge.fml.common.Mod;
 @Mod.EventBusSubscriber(modid = Gulp.ID, value = Dist.CLIENT)
 public final class ClientScreenEvents {
     private ClientScreenEvents() { }
+
+    /**
+     * In the inventory screen, pressing the "swallow hovered item" key (default V) while the mouse is over an item
+     * swallows that stack into your item storage; hold Ctrl to swallow just one. (Swallowing dropped items in the world
+     * with V still works as before.)
+     */
+    @SubscribeEvent
+    public static void onInventoryKey(ScreenEvent.KeyPressed.Pre e) {
+        if (!(e.getScreen() instanceof InventoryScreen screen)) return;
+        if (!ClientModEvents.INVENTORY_SWALLOW_KEY.isActiveAndMatches(InputConstants.getKey(e.getKeyCode(), e.getScanCode()))) return;
+        Slot slot = screen.getSlotUnderMouse();
+        // Only your own inventory and hotbar (not armor, the offhand or the crafting grid).
+        if (slot == null || !slot.hasItem() || !(slot.container instanceof Inventory) || slot.getSlotIndex() >= 36) return;
+        Net.send(9, slot.index | (Screen.hasControlDown() ? 1 << 16 : 0));
+        e.setCanceled(true);
+    }
 
     @SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post e) {

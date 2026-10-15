@@ -13,6 +13,7 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.client.event.RegisterGuiOverlaysEvent;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
+import net.minecraftforge.client.settings.KeyConflictContext;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
@@ -29,6 +30,10 @@ public final class ClientModEvents {
     public static final KeyMapping SWALLOW_KEY = new KeyMapping("key.gulp.swallow", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_V, "key.category.gulp");
     public static final KeyMapping MODE_KEY = new KeyMapping("key.gulp.mode", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_B, "key.category.gulp");
     public static final KeyMapping RELEASE_KEY = new KeyMapping("key.gulp.release", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_G, "key.category.gulp");
+    /** Inventory screen only: swallow the hovered item. Same default key (V) as swallowing in the world, with no clash. */
+    public static final KeyMapping INVENTORY_SWALLOW_KEY = new KeyMapping("key.gulp.inventory_swallow",
+            KeyConflictContext.GUI, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_V, "key.category.gulp");
+
     public static final KeyMapping SCREEN_KEY = new KeyMapping("key.gulp.screen", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_N, "key.category.gulp");
 
     @SubscribeEvent
@@ -54,6 +59,7 @@ public final class ClientModEvents {
         e.register(MODE_KEY);
         e.register(RELEASE_KEY);
         e.register(SCREEN_KEY);
+        e.register(INVENTORY_SWALLOW_KEY);
     }
 
     @SubscribeEvent

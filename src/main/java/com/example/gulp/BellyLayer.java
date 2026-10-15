@@ -2,6 +2,7 @@ package com.example.gulp;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.model.geom.EntityModelSet;
 import net.minecraft.client.model.geom.ModelPart;
@@ -41,6 +42,10 @@ public class BellyLayer extends RenderLayer<AbstractClientPlayer, PlayerModel<Ab
 
         float shown = ClientState.smoothedBelly(player.getUUID());
         if (shown < 0.02f) return;
+
+        if (GulpConfig.bellyStyle == GulpConfig.BellyStyle.OFF) return;
+        // Your own Custom Player Model already has a belly animation: let it be the belly instead of ours.
+        if (player == Minecraft.getInstance().player && CpmDriver.localModelHandlesBelly()) return;
 
         boolean classic = GulpConfig.bellyStyle == GulpConfig.BellyStyle.CLASSIC;
         ModelPart belly = classic ? bellyFull : bellyLow;
