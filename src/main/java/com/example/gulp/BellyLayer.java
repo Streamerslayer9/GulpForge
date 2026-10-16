@@ -14,6 +14,8 @@ import net.minecraft.client.renderer.entity.RenderLayerParent;
 import net.minecraft.client.renderer.entity.layers.RenderLayer;
 import net.minecraft.world.entity.player.PlayerModelPart;
 
+import java.util.List;
+
 /** Draws a stretched copy of the player's own torso (skin + clothing) bulging forward as the stomach fills. */
 public class BellyLayer extends RenderLayer<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> {
 
@@ -24,6 +26,10 @@ public class BellyLayer extends RenderLayer<AbstractClientPlayer, PlayerModel<Ab
     private static final float MAX_EXTRA_WIDTH = 0.18f;
 
     private final ModelPart bellyFull, jacketFull, bellyLow, jacketLow;
+    private final ModelPart bellyFullClothing, jacketFullClothing, bellyLowClothing, jacketLowClothing;
+    private final RenderLayerParent<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> parent;
+    /** Minecraft Comes Alive's skin and clothing layers on this renderer (found on first use; empty without MCA). */
+    private List<Object> mcaLayers;
 
     public BellyLayer(RenderLayerParent<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> parent, EntityModelSet models) {
         super(parent);
@@ -32,6 +38,11 @@ public class BellyLayer extends RenderLayer<AbstractClientPlayer, PlayerModel<Ab
         this.jacketFull = root.getChild("jacket_full");
         this.bellyLow = root.getChild("belly_low");
         this.jacketLow = root.getChild("jacket_low");
+        this.bellyFullClothing = root.getChild("belly_full_clothing");
+        this.jacketFullClothing = root.getChild("jacket_full_clothing");
+        this.bellyLowClothing = root.getChild("belly_low_clothing");
+        this.jacketLowClothing = root.getChild("jacket_low_clothing");
+        this.parent = parent;
     }
 
     @Override
@@ -64,11 +75,25 @@ public class BellyLayer extends RenderLayer<AbstractClientPlayer, PlayerModel<Ab
         poseStack.scale(widthScale, 1f, depthScale);
         poseStack.translate(0f, 0f, -2f / 16f);
 
-        VertexConsumer vc = buffer.getBuffer(RenderType.entityCutoutNoCull(player.getSkinTextureLocation()));
         int overlay = LivingEntityRenderer.getOverlayCoords(player, 0f);
-        belly.render(poseStack, vc, packedLight, overlay);
-        if (player.isModelPartShown(PlayerModelPart.JACKET)) {
-            jacket.render(poseStack, vc, packedLight, overlay);
+        boolean showJacket = player.isModelPartShown(PlayerModelPart.JACKET);
+
+        // Minecraft Comes Alive: when it gives this player its villager look, the visible skin and outfit are MCA's own
+        // textures, so stretch THOSE (skin first, then clothing, like MCA does) so the outfit grows with the belly.
+        if (mcaLayers == null) mcaLayers = McaSkins.findLayers(parent);
+        List<McaSkins.Pass> mca = McaSkins.passes(player, mcaLayers, partialTick);
+        if (mca != null && !mca.isEmpty()) {
+            for (McaSkins.Pass pass : mca) {
+                VertexConsumer mcaBuffer = buffer.getBuffer(RenderType.entityCutoutNoCull(pass.texture()));
+                ModelPart body = pass.clothing() ? (classic ? bellyFullClothing : bellyLowClothing) : belly;
+                ModelPart wear = pass.clothing() ? (classic ? jacketFullClothing : jacketLowClothing) : jacket;
+                body.render(poseStack, mcaBuffer, packedLight, overlay, pass.r(), pass.g(), pass.b(), 1f);
+                if (showJacket) wear.render(poseStack, mcaBuffer, packedLight, overlay, pass.r(), pass.g(), pass.b(), 1f);
+            }
+        } else {
+            VertexConsumer vc = buffer.getBuffer(RenderType.entityCutoutNoCull(player.getSkinTextureLocation()));
+            belly.render(poseStack, vc, packedLight, overlay);
+            if (showJacket) jacket.render(poseStack, vc, packedLight, overlay);
         }
         poseStack.popPose();
     }

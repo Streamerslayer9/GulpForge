@@ -47,6 +47,25 @@ public class BellyModel {
                         .addBox(-4f, (float) BELLY_TOP, -2f, 8f, (float) BELLY_HEIGHT, 4f, new CubeDeformation(0.27f)),
                 PartPose.ZERO);
 
+        // Meshes for Minecraft Comes Alive's clothing layer. MCA draws its outfit a little further out than its skin
+        // (0.0625 vs 0), so these are a little bigger than the ones above, or the outfit would clip through the belly.
+        root.addOrReplaceChild("belly_full_clothing",
+                CubeListBuilder.create().texOffs(16, 16)
+                        .addBox(-4f, 0f, -2f, 8f, 12f, 4f, new CubeDeformation(0.09f)),
+                PartPose.ZERO);
+        root.addOrReplaceChild("jacket_full_clothing",
+                CubeListBuilder.create().texOffs(16, 32)
+                        .addBox(-4f, 0f, -2f, 8f, 12f, 4f, new CubeDeformation(0.33f)),
+                PartPose.ZERO);
+        root.addOrReplaceChild("belly_low_clothing",
+                CubeListBuilder.create().texOffs(16, 16 + BELLY_TOP)
+                        .addBox(-4f, (float) BELLY_TOP, -2f, 8f, (float) BELLY_HEIGHT, 4f, new CubeDeformation(0.09f)),
+                PartPose.ZERO);
+        root.addOrReplaceChild("jacket_low_clothing",
+                CubeListBuilder.create().texOffs(16, 32 + BELLY_TOP)
+                        .addBox(-4f, (float) BELLY_TOP, -2f, 8f, (float) BELLY_HEIGHT, 4f, new CubeDeformation(0.33f)),
+                PartPose.ZERO);
+
         return LayerDefinition.create(mesh, 64, 64);
     }
 }

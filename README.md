@@ -101,6 +101,10 @@ reactions switch themselves off with one line in the log.
   Nobody likes hard mode, but fans mind it far less (-10).
 - MCA has no "scared" or "angry" mood (its moods are depressed, sad, unhappy, passive, fine, happy, overjoyed), so fear shows as
   the lowest mood plus the panic behaviour.
+- The belly and MCA's outfit: when MCA gives a player its villager look (its "villager" player model), the belly is drawn
+  with MCA's own skin texture (with the villager's skin tone) and clothing texture, in MCA's order, so the outfit grows with
+  the belly instead of the normal Minecraft skin poking through it. Players who aren't using MCA's villager look get the
+  normal belly. (McaSkins.java; MCA's clothing sits further out than its skin, so the clothing pass uses slightly bigger meshes.)
 - Digesting a villager also triggers MCA's own death rules (witnesses lose hearts, family grieves, a headstone may appear).
 - Predator status: swallowing a villager adds to it (hard 15, soft 3; digesting adds about 25; fans count for less) and it
   fades by 1 every 20 seconds. It is shown on the stomach screen. At 30 or more, villagers who are afraid of you refuse to
