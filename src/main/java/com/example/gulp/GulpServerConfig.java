@@ -21,6 +21,7 @@ public final class GulpServerConfig {
     public static final ForgeConfigSpec.IntValue MCA_HEARTS_LOCK;
     public static final ForgeConfigSpec.IntValue MCA_PREDATOR_DECAY_SECONDS;
     public static final ForgeConfigSpec.BooleanValue MCA_PANIC;
+    public static final ForgeConfigSpec.BooleanValue MCA_STATUS_MESSAGE;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -67,6 +68,10 @@ public final class GulpServerConfig {
         MCA_PANIC = b
                 .comment("If true, villagers who see you swallow or digest a villager run from you for a few seconds.")
                 .define("mcaVillagersPanic", true);
+        MCA_STATUS_MESSAGE = b
+                .comment("Test/dev helper: when a player joins, show a chat line saying whether this mod connected to Minecraft Comes Alive.",
+                        "Set to false to turn it off once you've confirmed it works.")
+                .define("mcaStatusMessage", true);
         SPEC = b.build();
     }
 

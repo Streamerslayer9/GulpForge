@@ -36,6 +36,8 @@ public final class ServerEvents {
         if (!(e.getEntity() instanceof ServerPlayer p)) return;
         PlayerHolding.onLogin(p);
         StomachLogic.sync(p, StomachManager.get(p.getServer()).of(p.getUUID()));
+        // Test/dev helper: tell the player whether we connected to Minecraft Comes Alive.
+        if (GulpServerConfig.MCA_STATUS_MESSAGE.get()) p.sendSystemMessage(McaIntegration.status());
     }
 
     // Anyone swallowed (or swallowing) when a player leaves is let out, so nobody is left stuck as a spectator.

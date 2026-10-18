@@ -1,6 +1,7 @@
 package com.example.gulp;
 
 import com.mojang.logging.LogUtils;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -67,6 +68,22 @@ public final class McaIntegration {
         return modLoaded && !broken && ensureReflection();
     }
 
+    /** A one-line chat message saying whether this mod is connected to MCA (shown on join; see mcaStatusMessage). */
+    public static Component status() {
+        if (!GulpServerConfig.MCA_ENABLED.get()) {
+            return Component.literal("[Gulp] MCA: reactions are turned off in the server config.").withStyle(ChatFormatting.GRAY);
+        }
+        if (modLoaded == null) modLoaded = ModList.get().isLoaded("mca");
+        if (!modLoaded) {
+            return Component.literal("[Gulp] MCA: not found (Minecraft Comes Alive isn't installed).").withStyle(ChatFormatting.GRAY);
+        }
+        if (active()) {
+            return Component.literal("[Gulp] MCA connected: villager reactions are on.").withStyle(ChatFormatting.GREEN);
+        }
+        return Component.literal("[Gulp] MCA found, but it didn't match what I expected, so reactions are off (see latest.log).")
+                .withStyle(ChatFormatting.RED);
+    }
+
     private static boolean ensureReflection() {
         if (villagerClass != null) return true;
         try {
@@ -82,13 +99,21 @@ public final class McaIntegration {
             } catch (NoSuchMethodException ignored) {
                 isGuard = null; // optional
             }
+            LOGGER.info("Vore Mod: MCA found, villager reactions are ready.");
             return true;
         } catch (Throwable t) {
             broken = true;
             villagerClass = null;
-            LOGGER.warn("Vore Mod: MCA is installed but its code isn't what I expected, so the MCA reactions are switched off ({}).", t.toString());
+            LOGGER.warn("Vore Mod: MCA is installed but its code isn't what I expected, so the MCA reactions are switched off.", t);
             return false;
         }
+    }
+
+    /** Logs a problem with the full error, but only the first few times so a repeating failure can't flood the log. */
+    private static int problemsLogged;
+
+    private static void problem(String what, Throwable t) {
+        if (problemsLogged++ < 5) LOGGER.warn("Vore Mod: MCA reaction problem: {}", what, t);
     }
 
     private static Method method(Class<?> c, String name, int parameters) throws NoSuchMethodException {
@@ -122,6 +147,7 @@ public final class McaIntegration {
             Object personality = getPersonality.invoke(brainOf(villager));
             return personality instanceof Enum<?> e ? e.name() : "";
         } catch (Throwable t) {
+            problem("couldn't read a villager's personality", t);
             return "";
         }
     }
@@ -160,8 +186,10 @@ public final class McaIntegration {
         if (scaled == 0) return;
         try {
             rewardHearts.invoke(brainOf(villager), player, scaled);
+            LOGGER.info("Vore Mod: villager {} hearts {} for {}", villager.getName().getString(),
+                    (scaled > 0 ? "+" : "") + scaled, player.getName().getString());
         } catch (Throwable t) {
-            LOGGER.debug("Vore Mod: couldn't change a villager's hearts: {}", t.toString());
+            problem("couldn't change a villager's hearts", t);
         }
     }
 
@@ -198,9 +226,20 @@ public final class McaIntegration {
 
     /** A villager is about to be swallowed (it is still in the world, so what it feels is saved with it). */
     public static void onSwallow(ServerPlayer p, Stomach s, LivingEntity swallowed) {
-        if (!active() || !isVillager(swallowed)) return;
+        boolean on = active();
+        if (!on || !isVillager(swallowed)) {
+            // Help work out why nothing happened: say so when a villager-type mob is swallowed but we didn't react.
+            if (swallowed.getType().toString().contains("villager")) {
+                LOGGER.info("Vore Mod: swallowed {} ({}) but no MCA reaction: MCA reactions {}, is MCA villager: {}",
+                        swallowed.getName().getString(), swallowed.getClass().getName(),
+                        on ? "on" : "off (config off, MCA missing, or MCA didn't match)", isVillager(swallowed));
+            }
+            return;
+        }
         boolean hard = s.hard && GulpServerConfig.HARD_MODE_ENABLED.get();
         Attitude a = attitude(swallowed);
+        LOGGER.info("Vore Mod: MCA villager {} swallowed (personality {}, attitude {}, {} mode)",
+                swallowed.getName().getString(), personalityOf(swallowed), a, hard ? "hard" : "soft");
         int hearts = hard
                 ? (a == Attitude.FAN ? -10 : a == Attitude.FEARFUL ? -50 : -40)
                 : (a == Attitude.FAN ? 15 : a == Attitude.FEARFUL ? -25 : -10);

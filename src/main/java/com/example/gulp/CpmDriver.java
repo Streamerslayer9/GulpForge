@@ -53,9 +53,10 @@ public final class CpmDriver {
 
         boolean resend = ticks % 200 == 0; // now and then, in case the player switched models
         boolean bellyExists = push(GulpConfig.cpmBellyName, total, resend);
-        push(GulpConfig.cpmMobsName, shownMobs, resend);
-        push(GulpConfig.cpmItemsName, shownItems, resend);
-        localModelHasBelly = bellyExists;
+        boolean mobsExists = push(GulpConfig.cpmMobsName, shownMobs, resend);
+        boolean itemsExists = push(GulpConfig.cpmItemsName, shownItems, resend);
+        // A model with ANY of the three belly animations drives its own belly, so our built-in box steps aside.
+        localModelHasBelly = bellyExists || mobsExists || itemsExists;
     }
 
     /** @return true if the model has an animation with this name */
