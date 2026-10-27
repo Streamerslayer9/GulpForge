@@ -8,6 +8,9 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.Container;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -28,6 +31,8 @@ import net.minecraftforge.network.PacketDistributor;
 import org.slf4j.Logger;
 
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Iterator;
 import java.util.UUID;
 
@@ -72,22 +77,40 @@ public final class StomachLogic {
 
     public static int pendingLooting() { return pendingLooting; }
 
+    /** Each player's currently open storage screen container, so the Digest buttons can't touch any other chest. */
+    private static final Map<UUID, SimpleContainer> OPEN_VIEWS = new HashMap<>();
+
     private StomachLogic() { }
 
     // 0 swallow | 1 toggle mode | 2 release last | 3 release all
     // 4 release entry (arg = uid) | 5 digest entry now (arg = uid) | 6 buy perk (arg = perk index)
-    // 7 open item storage | 8 toggle "let players swallow me"
+    // 7 open item storage | 8 set your role (arg = Role ordinal)
+    // 17 settings: instant Digest button on / off (arg 1 / 0)
+    // 16 destroy the enchantments on the source box (nothing is made)
+    // 15 click on an Enchant Stripper box (arg = box | button << 4 | shift << 5)
+    // 14 dev shortcut: one instant level (1 + P)
+    // 12 strip the source box into an enchanted book | 13 transfer source box enchantments to the target box (soft mode)
+    // 11 swallowed player: struggle (hard mode) / rub the walls (soft mode)
+    // 10 digest the first slot of the open storage screen (arg = how many, 1 or 64)
     // 9 swallow the item in an inventory slot (arg = slot in the inventory screen, plus 65536 for just one item)
     public static void handleAction(ServerPlayer p, int action, int arg) {
         if (p == null || !p.isAlive()) return;
-        // A swallowed player can do exactly one thing: get out (the Release key).
+        // A swallowed player can only try to get out (Release, soft mode only) or struggle / rub the walls (action 11).
         if (PlayerHolding.isHeld(p)) {
-            if (action == 2 || action == 3) PlayerHolding.escape(p);
+            if (action == 2 || action == 3) PlayerHolding.tryRelease(p);
+            else if (action == 11) PlayerHolding.struggle(p);
+            else if (action == 7) PlayerHolding.sendSharedStorage(p); // look at the swallower's storage (read-only)
             return;
         }
         if (p.isSpectator()) return;
         StomachManager mgr = StomachManager.get(p.getServer());
         Stomach s = mgr.of(p.getUUID());
+        // Roles: Prey and Neither have no swallowing, mode switch, digesting or item storage at all.
+        // (Release, perks and changing your role always work.)
+        if (!s.role.canEat() && (action == 0 || action == 1 || action == 5 || action == 7 || action == 9 || action == 10 || action == 12 || action == 13 || action == 15 || action == 16)) {
+            StomachLogic.say(p, s.role.cantSwallowMessage());
+            return;
+        }
         switch (action) {
             case 0 -> swallow(p, s, arg);
             case 1 -> {
@@ -127,8 +150,14 @@ public final class StomachLogic {
             case 5 -> {
                 int i = indexOf(s, arg);
                 if (i >= 0) {
-                    if (PlayerHolding.isPlayerEntry(s.contents.get(i))) {
+                    if (!s.instantDigest) {
+                        StomachLogic.say(p, Component.literal("Instant digest is turned off. You can turn it on in Settings."));
+                    } else if (PlayerHolding.isPlayerEntry(s.contents.get(i))) {
                         StomachLogic.say(p, Component.literal("Players are only held, never digested."));
+                    } else if (s.contents.get(i).getBoolean("Safe")) {
+                        StomachLogic.say(p, Component.literal("They came in by invitation, so they can't be digested."));
+                    } else if (McaIntegration.isChildEntry(s.contents.get(i), p.serverLevel())) {
+                        StomachLogic.say(p, Component.literal("Children can never be digested."));
                     } else if (hardModeAllowed()) {
                         digest(p, s, s.contents.remove(i), true);
                     } else {
@@ -138,17 +167,74 @@ public final class StomachLogic {
             }
             case 7 -> openStorage(p, mgr, s);
             case 9 -> swallowFromInventorySlot(p, s, arg);
+            case 17 -> {
+                // Settings: turn the instant Digest button on (arg 1) or off (arg 0).
+                s.instantDigest = arg != 0;
+                say(p, Component.literal("Instant digest button: " + (s.instantDigest ? "ON" : "OFF")));
+            }
+            case 14 -> {
+                // Dev shortcut (1 + P): one instant level, through the normal level-up (points, sound, message).
+                if (!GulpServerConfig.DEV_LEVEL_UP_ENABLED.get() && !p.hasPermissions(2)) {
+                    say(p, Component.literal("The dev level-up key is turned off on this server."));
+                } else if (s.level >= Stomach.MAX_LEVEL) {
+                    say(p, Component.literal("Already at the maximum stomach level."));
+                } else if (s.addXp(Stomach.xpForNext(s.level) - s.xp) > 0) {
+                    levelUp(p, s);
+                }
+            }
+            case 15 -> {
+                // Click on one of the Enchant Stripper boxes (arg: box | button << 4 | shift << 5), same as clicking a slot.
+                if (GulpServerConfig.ITEM_STORAGE_ENABLED.get() && p.containerMenu instanceof ChestMenu cm
+                        && cm.getContainer() == OPEN_VIEWS.get(p.getUUID())
+                        && cm.getContainer() instanceof SimpleContainer view) {
+                    EnchantTools.clickBox(p, s, view, arg & 15, (arg >> 4) & 1, ((arg >> 5) & 1) != 0);
+                }
+            }
+            case 12, 13, 16 -> {
+                // Enchant Stripper buttons on the storage screen: 12 = strip the source box into a book, 13 = transfer source box -> target box.
+                if (GulpServerConfig.ITEM_STORAGE_ENABLED.get() && p.containerMenu instanceof ChestMenu cm
+                        && cm.getContainer() == OPEN_VIEWS.get(p.getUUID())
+                        && cm.getContainer() instanceof SimpleContainer view) {
+                    if (action == 12) EnchantTools.strip(p, s, view);
+                    else if (action == 13) EnchantTools.transfer(p, s, view);
+                    else EnchantTools.destroy(p, s);
+                }
+            }
+            case 10 -> {
+                if (GulpServerConfig.ITEM_STORAGE_ENABLED.get() && p.containerMenu instanceof ChestMenu cm
+                        && cm.getContainer() == OPEN_VIEWS.get(p.getUUID())
+                        && cm.getContainer() instanceof SimpleContainer view) {
+                    StomachItems.digestFirstSlot(p, s, view, arg);
+                }
+            }
             case 8 -> {
-                s.allowSwallowed = !s.allowSwallowed;
-                StomachLogic.say(p, Component.literal(s.allowSwallowed
-                        ? "Other players can now swallow you (you can always get out with the Release key)."
-                        : "Other players can no longer swallow you."));
+                // Set your role (arg = Role ordinal).
+                Role newRole = Role.byId(arg);
+                if (newRole != null && newRole != s.role) {
+                    s.role = newRole;
+                    if (!newRole.canEat()) {
+                        // Someone who can't swallow can't keep holding anyone: everything is let out.
+                        boolean any = false;
+                        Iterator<CompoundTag> it = s.contents.iterator();
+                        while (it.hasNext()) {
+                            if (release(p, it.next())) {
+                                it.remove();
+                                any = true;
+                            }
+                        }
+                        if (any) sound(p, GulpSound.SPIT);
+                    }
+                    StomachLogic.say(p, Component.literal("Your role is now " + newRole.label + ". " + newRole.description));
+                    RolesPacket.broadcast(p.getServer());
+                }
             }
             case 6 -> {
                 // arg = perk index in the low 8 bits, how many ranks to buy above that (0 or 1 means one)
                 Perk perk = Perk.byIndex(arg & 0xFF);
                 int count = Math.max(1, Math.min(100, arg >> 8));
-                if (perk != null) {
+                if (perk != null && s.level < perk.minLevel) {
+                    say(p, Component.literal(perk.title + " unlocks at stomach level " + perk.minLevel + "."));
+                } else if (perk != null) {
                     int bought = Math.min(count, Math.min(s.points, perk.maxRank - s.rank(perk)));
                     if (bought > 0) {
                         s.ranks[perk.ordinal()] += bought;
@@ -186,9 +272,8 @@ public final class StomachLogic {
             return;
         }
         if (target instanceof ServerPlayer victim) {
-            if (PlayerHolding.swallow(p, s, victim, StomachManager.get(p.getServer()))) {
-                finishSwallow(p, s, victim.getName());
-            }
+            // Players are never swallowed on the spot: they get a request they can accept or decline.
+            PlayerHolding.request(p, s, victim, StomachManager.get(p.getServer()));
             return;
         }
         if (!(target instanceof LivingEntity le)) {
@@ -206,23 +291,35 @@ public final class StomachLogic {
             StomachLogic.say(p, Component.literal("That animal belongs to someone else."));
             return;
         }
+        swallowLiving(p, s, le, false);
+    }
+
+    /**
+     * Swallows a mob or villager (also used when a villager asks to be carried: safe = true, and they can never be digested).
+     * Children are never swallowed. @return true if it was swallowed
+     */
+    static boolean swallowLiving(ServerPlayer p, Stomach s, LivingEntity le, boolean safe) {
+        if (McaIntegration.isProtectedChild(le)) {
+            say(p, Component.empty().append(le.getName()).append(" is a child and can never be swallowed."));
+            return false;
+        }
         float size = Math.max(0.05f, le.getBbWidth() * le.getBbWidth() * le.getBbHeight());
         if (size > s.capacity()) {
             StomachLogic.say(p, Component.literal("Too big for your stomach! (needs " + Stomach.fmtVolume(size) + ", capacity " + Stomach.fmtVolume(s.capacity()) + ")"));
-            return;
+            return false;
         }
         if (s.used() + size > s.capacity()) {
             StomachLogic.say(p, Component.literal("Your stomach is too full."));
-            return;
+            return false;
         }
         if (s.contents.size() >= Stomach.MAX_MOBS) {
             StomachLogic.say(p, Component.literal("You can't hold more than " + Stomach.MAX_MOBS + " creatures at once."));
-            return;
+            return false;
         }
         le.stopRiding();
-        McaIntegration.onSwallow(p, s, le); // MCA villagers react first, so what they feel is saved with them
+        McaIntegration.onSwallow(p, s, le, safe); // MCA villagers react first, so what they feel is saved with them
         CompoundTag tag = new CompoundTag();
-        if (!le.save(tag)) return;
+        if (!le.save(tag)) return false;
 
         CompoundTag entry = new CompoundTag();
         entry.put("Entity", tag);
@@ -238,13 +335,16 @@ public final class StomachLogic {
         entry.putString("NameJson", Component.Serializer.toJson(displayName));
         entry.putInt("Uid", p.getRandom().nextInt());
 
+        entry.putBoolean("Safe", safe); // invited rides are never digested
+        McaIntegration.tagEntry(entry, le, p); // how they feel, so they can comment from inside
         le.discard();
         s.contents.add(entry);
         finishSwallow(p, s, displayName);
+        return true;
     }
 
     /** Starts the swallow cooldown, plays the sound and shows the message. */
-    private static void finishSwallow(ServerPlayer p, Stomach s, Component what) {
+    static void finishSwallow(ServerPlayer p, Stomach s, Component what) {
         // Quick Gulp perk: every rank takes 0.075s off the cooldown anywhere, and 0.15s when looking up.
         // 2s with no perk; with 10 ranks it is 1.25s anywhere and 0.5s when looking up.
         int quick = s.rank(Perk.QUICK);
@@ -293,6 +393,7 @@ public final class StomachLogic {
         if (!(slot.container instanceof Inventory) || slot.getSlotIndex() >= 36 || !slot.hasItem()) return;
 
         ItemStack stack = slot.getItem();
+        boolean hazardous = HazardItems.isHazardous(stack); // sharp / hazardous items hurt you as they go down
         int wanted = justOne ? 1 : stack.getCount();
         ItemStack offer = stack.copy();
         offer.setCount(wanted);
@@ -307,6 +408,71 @@ public final class StomachLogic {
         p.containerMenu.broadcastChanges();
         sound(p, GulpSound.SWALLOW);
         say(p, Component.literal("Gulp! Swallowed " + taken + "x ").append(name));
+        if (hazardous) hazardHurt(p, name.getString() + " hurt on the way down.");
+    }
+
+    /** Self-damage for sharp / hazardous items. Never below 2 hearts, so it can hurt but not kill; creative players take none. */
+    static void hazardHurt(ServerPlayer p, String message) {
+        if (p.isCreative()) return;
+        float damage = Math.min(GulpServerConfig.HAZARD_SELF_DAMAGE.get().floatValue(), p.getHealth() - 4f);
+        if (damage > 0f) {
+            p.hurt(p.damageSources().generic(), damage);
+            say(p, Component.literal("Ouch! " + message));
+        }
+    }
+
+    /**
+     * The storage screen. Behaves like a normal chest, except that moving a sharp / hazardous item between your inventory
+     * and the stomach storage hurts you (shift-click, number-key swap, or picking it up on one side and putting it down on
+     * the other). Moving it around inside the storage does not.
+     */
+    private static final class StorageMenu extends ChestMenu {
+        private int origin; // where a hazardous item on the cursor came from: 0 none, 1 stomach, 2 inventory
+
+        StorageMenu(MenuType<?> type, int id, Inventory inv, Container view, int rows) {
+            super(type, id, inv, view, rows);
+        }
+
+        private static int hz(ItemStack st) { return HazardItems.isHazardous(st) ? st.getCount() : 0; }
+
+        private int inside() {
+            int n = 0;
+            for (int i = 0; i < getContainer().getContainerSize(); i++) n += hz(getContainer().getItem(i));
+            return n;
+        }
+
+        private int outside() { // the inventory and hotbar slots of this screen
+            int n = 0;
+            for (int i = getContainer().getContainerSize(); i < slots.size(); i++) n += hz(slots.get(i).getItem());
+            return n;
+        }
+
+        @Override
+        public void clicked(int slotId, int button, ClickType type, Player player) {
+            if (!(player instanceof ServerPlayer sp) || sp.isCreative()) {
+                super.clicked(slotId, button, type, player);
+                return;
+            }
+            int insideBefore = inside();
+            int outsideBefore = outside();
+            int carriedBefore = hz(getCarried());
+            super.clicked(slotId, button, type, player);
+            int insideDelta = inside() - insideBefore;
+            int outsideDelta = outside() - outsideBefore;
+            int carriedAfter = hz(getCarried());
+
+            boolean crossed = false;
+            if (carriedAfter == carriedBefore) {
+                crossed = (insideDelta > 0 && outsideDelta < 0) || (insideDelta < 0 && outsideDelta > 0); // moved straight across
+                if (carriedAfter == 0) origin = 0;
+            } else if (carriedAfter > carriedBefore) { // picked up: remember which side it came from
+                origin = insideDelta < 0 ? 1 : (outsideDelta < 0 ? 2 : origin);
+            } else { // put down: hurts if it ended up on the other side
+                crossed = (insideDelta > 0 && origin == 2) || (outsideDelta > 0 && origin == 1);
+                if (carriedAfter == 0) origin = 0;
+            }
+            if (crossed) hazardHurt(sp, "Handling something sharp inside your stomach hurts.");
+        }
     }
 
     /** Opens the item storage as a chest-style screen (shift-click moves items in and out like a chest). */
@@ -320,6 +486,7 @@ public final class StomachLogic {
         SimpleContainer view = new SimpleContainer(slots);
         for (int i = 0; i < slots; i++) view.setItem(i, s.storage.get(i));
         // Every change made in the screen is copied straight back into the saved storage.
+        OPEN_VIEWS.put(p.getUUID(), view);
         view.addListener(c -> {
             for (int i = 0; i < slots; i++) s.storage.set(i, view.getItem(i));
             mgr.setDirty();
@@ -333,7 +500,7 @@ public final class StomachLogic {
             case 5 -> MenuType.GENERIC_9x5;
             default -> MenuType.GENERIC_9x6;
         };
-        p.openMenu(new SimpleMenuProvider((id, inv, player) -> new ChestMenu(type, id, inv, view, rows),
+        p.openMenu(new SimpleMenuProvider((id, inv, player) -> new StorageMenu(type, id, inv, view, rows),
                 Component.literal(Gulp.STORAGE_TITLE)));
     }
 
@@ -347,6 +514,8 @@ public final class StomachLogic {
             sync(p, s);
             mgr.setDirty();
         }
+        // Item storage: in hard mode, gear is broken down and trash dissolves. Works with no mobs inside.
+        StomachItems.tick(p, mgr, s, s.hard && hardModeAllowed());
         if (s.contents.isEmpty()) return;
 
         boolean changed = false;
@@ -365,6 +534,17 @@ public final class StomachLogic {
                 continue;
             }
             e.putInt("HeldTicks", e.getInt("HeldTicks") + 1); // how long this mob has been inside
+            if (McaIntegration.isChildEntry(e, p.serverLevel())) {
+                // A child is never held (an old save, or a child that was there before this rule): let them out.
+                if (release(p, e)) {
+                    it.remove();
+                    changed = true;
+                    StomachLogic.say(p, Component.empty().append(entryName(e)).append(" is a child and was let out. Children can never be swallowed."));
+                }
+                continue;
+            }
+            McaIntegration.tickInside(p, e, hardNow); // a villager who likes you may comment from inside
+            if (e.getBoolean("Safe")) continue;       // invited rides are never digested, hurt you, or dissolved
             if (hardNow) {
                 // Phase 1: the digestion bar fills up.
                 int d = e.getInt("Digest");
@@ -564,7 +744,7 @@ public final class StomachLogic {
     }
 
     /** Adds XP (scaled by the server's xpMultiplier, with fractions rounded randomly) and handles level-ups. */
-    private static void gainXp(ServerPlayer p, Stomach s, float amount) {
+    static void gainXp(ServerPlayer p, Stomach s, float amount) {
         float scaled = amount * GulpServerConfig.XP_MULTIPLIER.get().floatValue();
         int whole = (int) scaled;
         if (p.getRandom().nextFloat() < scaled - whole) whole++;

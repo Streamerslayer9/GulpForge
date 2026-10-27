@@ -4,6 +4,11 @@ import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.world.item.BundleItem;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.ShulkerBoxBlock;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.ContainerHelper;
 import net.minecraft.world.item.ItemStack;
 
@@ -27,6 +32,8 @@ public class Stomach {
     }
 
     public boolean hard = false;
+    /** Shows the Digest button next to each mob on the stomach screen. Off by default; the player turns it on in Settings. */
+    public boolean instantDigest = false;
     public int level = 1;
     public int xp = 0;
     public int points = 0;                                  // unspent perk points
@@ -36,11 +43,17 @@ public class Stomach {
     /** Item storage: up to 54 slots, but only the first storageSlots() are usable (it grows with your level). */
     public final NonNullList<ItemStack> storage = NonNullList.withSize(54, ItemStack.EMPTY);
 
-    /** Other players can only swallow you if you turn this on. Off by default. */
-    public boolean allowSwallowed = false;
+    /** The two Enchant Stripper boxes on the storage screen: 0 = source (enchanted gear), 1 = target. Saved with the stomach. */
+    public final NonNullList<ItemStack> stripSlots = NonNullList.withSize(2, ItemStack.EMPTY);
+
+    /** Role badge: who can swallow whom. Pred by default (you can swallow, nobody can swallow you). See Role. */
+    public Role role = Role.PRED;
 
     /** MCA: "predator" status. Grows when you swallow/digest villagers, fades with time (see McaIntegration). */
     public int predator = 0;
+
+    /** Universal Digestion (Iron Gut): items eaten since the last hunger payout, always 0..31 (see StomachItems.DIGEST_THRESHOLD). */
+    public int digestProgress = 0;
 
     public transient int cooldown = 0;
 
@@ -105,9 +118,35 @@ public class Stomach {
         float total = 0f;
         for (int i = 0; i < slots; i++) {
             ItemStack stack = storage.get(i);
-            if (!stack.isEmpty()) total += stack.getCount() / (float) stack.getMaxStackSize();
+            total += weightOf(stack);
         }
         return Math.min(1f, total / slots);
+    }
+
+    /**
+     * How much of a slot a stack weighs: count / max stack size. Shulker boxes and bundles also weigh what is inside
+     * them (nestedWeightMultiplier), so a full shulker fills the belly far more than an empty one.
+     */
+    public static float weightOf(ItemStack stack) {
+        return weightOf(stack, 0);
+    }
+
+    private static float weightOf(ItemStack stack, int depth) {
+        if (stack.isEmpty()) return 0f;
+        float weight = stack.getCount() / (float) stack.getMaxStackSize();
+        if (depth >= 3 || !stack.hasTag()) return weight;
+        ListTag inner = null;
+        if (stack.getItem() instanceof BundleItem) {
+            inner = stack.getTag().getList("Items", Tag.TAG_COMPOUND);
+        } else if (Block.byItem(stack.getItem()) instanceof ShulkerBoxBlock) {
+            inner = stack.getTag().getCompound("BlockEntityTag").getList("Items", Tag.TAG_COMPOUND);
+        }
+        if (inner != null) {
+            float sum = 0f;
+            for (int i = 0; i < inner.size(); i++) sum += weightOf(ItemStack.of(inner.getCompound(i)), depth + 1);
+            weight += sum * GulpServerConfig.NESTED_WEIGHT_MULTIPLIER.get().floatValue() * stack.getCount();
+        }
+        return weight;
     }
 
     public double used() {
@@ -147,9 +186,12 @@ public class Stomach {
         CompoundTag perks = new CompoundTag();
         for (Perk p : Perk.values()) perks.putInt(p.name(), ranks[p.ordinal()]);
         nbt.put("Perks", perks);
-        nbt.putBoolean("AllowSwallowed", allowSwallowed);
+        nbt.putString("Role", role.name());
+        nbt.putBoolean("InstantDigest", instantDigest);
         nbt.putInt("Predator", predator);
+        nbt.putInt("DigestProgress", digestProgress);
         nbt.put("Storage", ContainerHelper.saveAllItems(new CompoundTag(), storage));
+        nbt.put("StripSlots", ContainerHelper.saveAllItems(new CompoundTag(), stripSlots));
         ListTag list = new ListTag();
         list.addAll(contents);
         nbt.put("Contents", list);
@@ -162,9 +204,14 @@ public class Stomach {
         s.level = Math.max(1, nbt.getInt("Level"));
         s.xp = nbt.getInt("Xp");
         s.points = nbt.contains("Points") ? nbt.getInt("Points") : s.level - 1;
-        s.allowSwallowed = nbt.getBoolean("AllowSwallowed");
+        // Saves from before roles existed only had the "let players swallow me" switch: ON became Both, OFF became Pred.
+        Role saved = nbt.contains("Role") ? Role.byName(nbt.getString("Role")) : null;
+        s.role = saved != null ? saved : (nbt.getBoolean("AllowSwallowed") ? Role.BOTH : Role.PRED);
+        s.instantDigest = nbt.getBoolean("InstantDigest"); // missing in older saves = off
         s.predator = Math.max(0, nbt.getInt("Predator"));
+        s.digestProgress = Math.max(0, Math.min(StomachItems.DIGEST_THRESHOLD - 1, nbt.getInt("DigestProgress")));
         ContainerHelper.loadAllItems(nbt.getCompound("Storage"), s.storage);
+        ContainerHelper.loadAllItems(nbt.getCompound("StripSlots"), s.stripSlots);
         CompoundTag perks = nbt.getCompound("Perks");
         for (Perk p : Perk.values()) s.ranks[p.ordinal()] = Math.min(p.maxRank, perks.getInt(p.name()));
         // Older saves earned fewer points. Top them up so everyone has what a player at their level should have.

@@ -2,15 +2,17 @@ package com.example.gulp;
 
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Client-side settings. Saved to config/gulp-client.properties. */
 public class SettingsScreen extends Screen {
     private static final int W = 250;
-    private static final int H = 224;
+    private static final int H = 248;
 
-    private Button bellyButton, levelUpButton, actionButton, allowButton, perkMenuButton, cpmButton;
+    private Button bellyButton, levelUpButton, actionButton, roleButton, perkMenuButton, cpmButton, instantButton;
+    private Role shownRole;
 
     public SettingsScreen() {
         super(Component.literal("Gulp Settings"));
@@ -25,8 +27,14 @@ public class SettingsScreen extends Screen {
         actionButton.setMessage(Component.literal("Action messages: " + (GulpConfig.actionMessages ? "ON" : "OFF")));
         cpmButton.setMessage(Component.literal("CPM belly sliders: " + (GulpConfig.cpmSliders ? "ON" : "OFF")
                 + (CpmBridge.available() ? "" : " (CPM not found)")));
+        instantButton.setMessage(Component.literal("Instant digest button: " + (ClientState.isInstantDigest() ? "ON" : "OFF")));
         perkMenuButton.setMessage(Component.literal("Perk menu: " + (GulpConfig.legacyPerkMenu ? "Legacy" : "New look")));
-        allowButton.setMessage(Component.literal("Let players swallow me: " + (ClientState.allowSwallowed() ? "ON" : "OFF")));
+        Role role = ClientState.role();
+        roleButton.setMessage(Component.literal("Role: ").append(Component.literal(role.label).withStyle(st -> st.withColor(role.color & 0xFFFFFF))));
+        if (role != shownRole) { // the tooltip is only rebuilt when the role changes
+            shownRole = role;
+            roleButton.setTooltip(Tooltip.create(Component.literal(role.description + "\n\nClick to switch: Pred, Prey, Both, Neither.")));
+        }
     }
 
     @Override
@@ -47,8 +55,8 @@ public class SettingsScreen extends Screen {
             refresh();
         }).bounds(x + 15, y + 46, W - 30, 20).build();
 
-        // This one is kept on the server (it decides whether others may swallow you), not in your local settings file.
-        allowButton = Button.builder(Component.empty(), btn -> Net.send(8))
+        // Your role is kept on the server (it decides who can swallow whom), not in your local settings file.
+        roleButton = Button.builder(Component.empty(), btn -> Net.send(8, ClientState.role().next().ordinal()))
                 .bounds(x + 15, y + 118, W - 30, 20).build();
 
         // The short action-bar messages when you do something: Gulp! Swallowed Cow, Too big for your stomach, ...
@@ -71,16 +79,25 @@ public class SettingsScreen extends Screen {
             refresh();
         }).bounds(x + 15, y + 166, W - 30, 20).build();
 
+        // Whether the Digest button shows next to each mob on the stomach screen. Kept on the server, off by default.
+        instantButton = Button.builder(Component.empty(), btn -> Net.send(17, ClientState.isInstantDigest() ? 0 : 1))
+                .bounds(x + 15, y + 190, W - 30, 20).build();
+        instantButton.setTooltip(Tooltip.create(Component.literal(
+                "Shows a Digest button next to each mob in your stomach that digests it right away. Off by default.")));
+        addRenderableWidget(instantButton);
         addRenderableWidget(bellyButton);
         addRenderableWidget(cpmButton);
         addRenderableWidget(actionButton);
         addRenderableWidget(perkMenuButton);
-        addRenderableWidget(allowButton);
+        addRenderableWidget(roleButton);
         addRenderableWidget(levelUpButton);
         addRenderableWidget(Button.builder(Component.literal("Sounds..."), btn -> this.minecraft.setScreen(new SoundsScreen()))
                 .bounds(x + 15, y + 94, W - 30, 20).build());
 
-        addRenderableWidget(Button.builder(Component.literal("Back"), btn -> this.minecraft.setScreen(new StomachScreen()))
+        // With a role that can't swallow there is no stomach menu, so Back just closes.
+        addRenderableWidget(Button.builder(Component.literal("Back"), btn -> {
+                    if (ClientState.role().canEat()) this.minecraft.setScreen(new StomachScreen()); else onClose();
+                })
                 .bounds(x + 8, y + H - 28, 60, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Close"), btn -> onClose())
                 .bounds(x + W - 68, y + H - 28, 60, 20).build());
@@ -90,7 +107,7 @@ public class SettingsScreen extends Screen {
 
     @Override
     public void tick() {
-        refresh(); // the "let players swallow me" label follows what the server says
+        refresh(); // the role label follows what the server says
     }
 
     @Override

@@ -18,9 +18,20 @@ public final class ClientState {
     public record EntryInfo(int uid, Component name, String typeId, float size, float hp, float maxHp, float digest) { }
 
     private static boolean hard;
-    private static boolean allowSwallowed;
+    private static boolean instantDigest;
+    // While swallowed: 0 = not, 1 = soft, 2 = hard, plus who holds you, how digested you are and your escape chance.
+    private static int heldMode;
+    private static String heldHolder = "";
+    private static float heldProgress;
+    private static float heldChance;
+    private static Role role = Role.PRED;
+    /** Everyone's role, from the server (for the "point at a player" badge). */
+    private static final java.util.Map<java.util.UUID, Role> roles = new java.util.HashMap<>();
     private static int predator;
     private static float itemFill;
+    private static int digestProgress;
+    private static net.minecraft.world.item.ItemStack strip0 = net.minecraft.world.item.ItemStack.EMPTY;
+    private static net.minecraft.world.item.ItemStack strip1 = net.minecraft.world.item.ItemStack.EMPTY;
     private static int level = 1, xp, xpNeeded = 100, points;
     private static float used, cap = 1.75f;
     private static int[] ranks = new int[Perk.values().length];
@@ -28,15 +39,19 @@ public final class ClientState {
 
     public static void apply(SyncPacket m) {
         hard = m.hard;
+        instantDigest = m.instantDigest;
         level = m.level;
         xp = m.xp;
         xpNeeded = m.xpNeeded;
         used = m.used;
         cap = m.cap;
         points = m.points;
-        allowSwallowed = m.allowSwallowed;
+        role = Role.byId(m.role) != null ? Role.byId(m.role) : Role.PRED;
         predator = m.predator;
         itemFill = m.itemFill;
+        digestProgress = m.digestProgress;
+        strip0 = m.strip0;
+        strip1 = m.strip1;
         ranks = m.ranks;
         entries = m.entries;
     }
@@ -67,13 +82,19 @@ public final class ClientState {
     /** Forget everything (called when you leave a world/server so nothing carries over to the next one). */
     public static void reset() {
         hard = false;
+        instantDigest = false;
         level = 1;
         xp = 0;
         xpNeeded = Stomach.xpForNext(1);
         points = 0;
-        allowSwallowed = false;
+        role = Role.PRED;
+        roles.clear();
+        heldMode = 0;
         predator = 0;
         itemFill = 0f;
+        digestProgress = 0;
+        strip0 = net.minecraft.world.item.ItemStack.EMPTY;
+        strip1 = net.minecraft.world.item.ItemStack.EMPTY;
         used = 0f;
         cap = 1.75f;
         ranks = new int[Perk.values().length];
@@ -84,9 +105,36 @@ public final class ClientState {
     }
 
     public static boolean isHard() { return hard; }
-    public static boolean allowSwallowed() { return allowSwallowed; }
+    public static boolean isInstantDigest() { return instantDigest; }
+    public static Role role() { return role; }
+
+    public static void setHeld(int mode, String holder, float progress, float chance) {
+        heldMode = mode;
+        heldHolder = holder;
+        heldProgress = progress;
+        heldChance = chance;
+    }
+    public static int heldMode() { return heldMode; }
+    public static String heldHolder() { return heldHolder; }
+    public static float heldProgress() { return heldProgress; }
+    public static float heldChance() { return heldChance; }
+
+    /** Another player's role, or null if the server hasn't told us. */
+    public static Role roleOf(java.util.UUID id) { return roles.get(id); }
+
+    public static void setRoles(java.util.Map<java.util.UUID, Integer> map) {
+        roles.clear();
+        map.forEach((id, r) -> {
+            Role role = Role.byId(r);
+            if (role != null) roles.put(id, role);
+        });
+    }
     public static int predator() { return predator; }
     public static float itemFill() { return itemFill; }
+    public static int digestProgress() { return digestProgress; }
+
+    /** The Enchant Stripper boxes: 0 = source, 1 = target. */
+    public static net.minecraft.world.item.ItemStack stripSlot(int i) { return i == 0 ? strip0 : strip1; }
     public static int level() { return level; }
     public static int xp() { return xp; }
     public static int xpNeeded() { return xpNeeded; }
@@ -99,7 +147,7 @@ public final class ClientState {
     /** Changes whenever the screens need to rebuild their buttons. */
     public static String signature() {
         StringBuilder sb = new StringBuilder();
-        sb.append(hard).append('|').append(points).append('|').append(Arrays.toString(ranks)).append('|');
+        sb.append(hard).append(instantDigest).append('|').append(points).append('|').append(Arrays.toString(ranks)).append('|');
         for (EntryInfo e : entries) sb.append(e.uid()).append(',');
         return sb.toString();
     }
